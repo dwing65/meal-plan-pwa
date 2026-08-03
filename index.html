@@ -1,0 +1,961 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Meal-Plan Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<meta name="theme-color" content="#121212" />
+
+<style>
+  :root {
+    --bg: #f7f7f7;
+    --card-bg: #ffffff;
+    --text: #222;
+    --border: #ddd;
+    --table-border: #ccc;
+    --table-header-bg: #eaeaea;
+    --accent: #0077cc;
+    --accent-soft: #cfe6ff;
+  }
+  body.dark {
+    --bg: #121212;
+    --card-bg: #1e1e1e;
+    --text: #f5f5f5;
+    --border: #333;
+    --table-border: #444;
+    --table-header-bg: #2a2a2a;
+    --accent: #4da3ff;
+    --accent-soft: #203a5c;
+  }
+
+  body {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+  }
+
+  .wrapper {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 16px;
+  }
+
+  h1, h2, h3 {
+    margin-top: 0.5em;
+    margin-bottom: 0.3em;
+  }
+
+  .top-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+
+  .top-bar h1 {
+    margin: 0;
+  }
+
+  .small-note {
+    font-size: 0.85rem;
+    opacity: 0.8;
+  }
+
+  .section {
+    background: var(--card-bg);
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    margin-bottom: 16px;
+  }
+
+  button {
+    padding: 6px 10px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: var(--card-bg);
+    color: var(--text);
+  }
+  button:hover {
+    border-color: var(--accent);
+  }
+
+  .grid-container {
+    overflow-x: auto;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--card-bg);
+    min-width: 600px;
+  }
+  th, td {
+    border: 1px solid var(--table-border);
+    padding: 6px 8px;
+    font-size: 0.9rem;
+    vertical-align: top;
+  }
+  th {
+    background: var(--table-header-bg);
+    text-align: left;
+  }
+  label {
+    display: block;
+    margin-bottom: 2px;
+  }
+
+  details {
+    margin-top: 8px;
+  }
+  summary {
+    cursor: pointer;
+    font-weight: 600;
+    padding: 4px 0;
+  }
+  .card {
+    border-top: 1px solid var(--border);
+    padding-top: 8px;
+    margin-top: 8px;
+  }
+  .ingredients, .instructions {
+    padding-left: 20px;
+    margin-top: 4px;
+    margin-bottom: 4px;
+  }
+
+  /* Macro panel */
+  .macro-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 4px 0;
+    font-size: 0.9rem;
+  }
+  .macro-label {
+    min-width: 70px;
+  }
+  .macro-values {
+    min-width: 120px;
+  }
+  .macro-bar {
+    flex: 1;
+    height: 10px;
+    border-radius: 999px;
+    background: var(--accent-soft);
+    overflow: hidden;
+  }
+  .macro-bar-fill {
+    height: 100%;
+    background: var(--accent);
+    width: 0%;
+    transition: width 0.2s ease-out;
+  }
+  .macro-note {
+    font-size: 0.8rem;
+    opacity: 0.8;
+    margin-top: 4px;
+  }
+
+  @media (max-width: 600px) {
+    .wrapper {
+      padding: 10px;
+    }
+    table {
+      font-size: 0.8rem;
+    }
+    .top-bar {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+  }
+
+  @media print {
+    body {
+      background: #ffffff;
+      color: #000000;
+    }
+    .top-bar button {
+      display: none;
+    }
+    .wrapper {
+      max-width: none;
+      margin: 0;
+      padding: 0;
+    }
+  }
+</style>
+
+<script>
+  const STORAGE_KEY = "mealPlanCheckboxes_v2";
+  const THEME_KEY = "mealPlanTheme_v2";
+  const MACRO_TOTALS_KEY = "mealPlanDailyTotals_v2";
+
+  // Macro targets (adjust if you want different goals)
+  const MACRO_TARGETS = {
+    calories: 2200,
+    protein: 150,
+    carbs: 200,
+    fat: 70
+  };
+
+  // --- Macro Database (per meal) ---
+  const MEAL_MACROS = {
+    "Greek yogurt + berries": { calories: 280, protein: 22, carbs: 28, fat: 8 },
+    "Oats": { calories: 150, protein: 5, carbs: 27, fat: 3 },
+    "Protein shake + banana": { calories: 250, protein: 25, carbs: 30, fat: 3 },
+    "Oatmeal + protein + fruit": { calories: 350, protein: 25, carbs: 45, fat: 6 },
+    "Cottage cheese + fruit": { calories: 220, protein: 24, carbs: 14, fat: 5 },
+    "Eggs + toast": { calories: 260, protein: 18, carbs: 20, fat: 12 },
+    "Smoothie (protein + fruit)": { calories: 300, protein: 25, carbs: 35, fat: 4 },
+    "Yogurt + granola": { calories: 320, protein: 18, carbs: 40, fat: 10 },
+
+    "Chicken salad": { calories: 350, protein: 40, carbs: 12, fat: 14 },
+    "Turkey wrap": { calories: 330, protein: 28, carbs: 32, fat: 10 },
+    "Tuna salad bowl": { calories: 300, protein: 35, carbs: 10, fat: 12 },
+    "Chicken + quinoa": { calories: 420, protein: 38, carbs: 40, fat: 12 },
+    "Lentil soup + salad": { calories: 380, protein: 22, carbs: 48, fat: 8 },
+    "Salmon salad": { calories: 420, protein: 36, carbs: 10, fat: 24 },
+    "Chicken Caesar": { calories: 380, protein: 32, carbs: 12, fat: 22 },
+
+    "Apple + nuts": { calories: 220, protein: 4, carbs: 22, fat: 14 },
+    "Small Greek yogurt": { calories: 100, protein: 10, carbs: 6, fat: 2 },
+    "Carrots + hummus": { calories: 180, protein: 4, carbs: 20, fat: 8 },
+    "Protein shake": { calories: 180, protein: 24, carbs: 6, fat: 2 },
+    "Nuts": { calories: 180, protein: 5, carbs: 6, fat: 16 },
+
+    "Salmon + roasted veg": { calories: 520, protein: 42, carbs: 18, fat: 28 },
+    "Chicken stir-fry": { calories: 450, protein: 40, carbs: 22, fat: 18 },
+    "Beef + roasted veg": { calories: 520, protein: 38, carbs: 20, fat: 30 },
+    "Baked cod + veg": { calories: 420, protein: 36, carbs: 18, fat: 16 },
+    "Chicken fajita plate": { calories: 480, protein: 38, carbs: 22, fat: 20 },
+    "Turkey meatballs + veg": { calories: 460, protein: 40, carbs: 18, fat: 22 },
+    "Shrimp stir-fry": { calories: 380, protein: 34, carbs: 16, fat: 14 }
+  };
+
+  function loadCheckboxState() {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (!saved) return;
+    try {
+      const state = JSON.parse(saved);
+      document.querySelectorAll("input[type=checkbox]").forEach(cb => {
+        if (state[cb.id]) {
+          cb.checked = true;
+          cb.parentElement.style.opacity = "0.5";
+        }
+      });
+    } catch (e) {
+      console.warn("Could not parse saved checkbox state", e);
+    }
+  }
+
+  function saveCheckboxState() {
+    const state = {};
+    document.querySelectorAll("input[type=checkbox]").forEach(cb => {
+      if (cb.id) state[cb.id] = cb.checked;
+    });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }
+
+  function calculateDailyMacros() {
+    let totals = { calories: 0, protein: 0, carbs: 0, fat: 0 };
+
+    document.querySelectorAll("input[type=checkbox]").forEach(cb => {
+      if (cb.checked) {
+        const label = cb.parentElement.textContent.trim();
+        const meal = MEAL_MACROS[label];
+        if (meal) {
+          totals.calories += meal.calories;
+          totals.protein += meal.protein;
+          totals.carbs += meal.carbs;
+          totals.fat += meal.fat;
+        }
+      }
+    });
+
+    localStorage.setItem(MACRO_TOTALS_KEY, JSON.stringify(totals));
+    renderDailyTotals(totals);
+  }
+
+  function renderDailyTotals(t) {
+    const c = t.calories || 0;
+    const p = t.protein || 0;
+    const carb = t.carbs || 0;
+    const f = t.fat || 0;
+
+    document.getElementById("calories-total").textContent = c;
+    document.getElementById("protein-total").textContent = p + "g";
+    document.getElementById("carbs-total").textContent = carb + "g";
+    document.getElementById("fat-total").textContent = f + "g";
+
+    const calPct = Math.min(100, (c / MACRO_TARGETS.calories) * 100);
+    const proPct = Math.min(100, (p / MACRO_TARGETS.protein) * 100);
+    const carbPct = Math.min(100, (carb / MACRO_TARGETS.carbs) * 100);
+    const fatPct = Math.min(100, (f / MACRO_TARGETS.fat) * 100);
+
+    document.getElementById("bar-calories").style.width = calPct + "%";
+    document.getElementById("bar-protein").style.width = proPct + "%";
+    document.getElementById("bar-carbs").style.width = carbPct + "%";
+    document.getElementById("bar-fat").style.width = fatPct + "%";
+  }
+
+  function initCheckboxes() {
+    document.querySelectorAll("input[type=checkbox]").forEach(cb => {
+      cb.addEventListener("change", () => {
+        cb.parentElement.style.opacity = cb.checked ? "0.5" : "1";
+        saveCheckboxState();
+        calculateDailyMacros();
+      });
+    });
+  }
+
+  function toggleTheme() {
+    const body = document.body;
+    const isDark = body.classList.toggle("dark");
+    localStorage.setItem(THEME_KEY, isDark ? "dark" : "light");
+  }
+
+  function loadTheme() {
+    const saved = localStorage.getItem(THEME_KEY);
+    if (saved === "dark") {
+      document.body.classList.add("dark");
+    }
+  }
+
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker
+        .register("service-worker.js")
+        .then(() => console.log("Service worker registered"))
+        .catch(err => console.error("SW registration failed", err));
+    });
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    loadTheme();
+    loadCheckboxState();
+    initCheckboxes();
+
+    const savedTotals = localStorage.getItem(MACRO_TOTALS_KEY);
+    if (savedTotals) {
+      renderDailyTotals(JSON.parse(savedTotals));
+    } else {
+      renderDailyTotals({ calories: 0, protein: 0, carbs: 0, fat: 0 });
+    }
+  });
+</script>
+</head>
+<body>
+<div class="wrapper">
+
+  <div class="top-bar">
+    <div>
+      <h1>Weekly Meal-Plan Dashboard</h1>
+      <p class="small-note">
+        Fasted ride 6:30 • Breakfast 7:30 • Lunch 12:00 • Snack 3:00 • Dinner 6:30 • Evening 8:00
+      </p>
+    </div>
+    <div>
+      <button type="button" onclick="toggleTheme()">Toggle Dark Mode</button>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Weekly Grid (Clickable Checkboxes)</h2>
+    <div class="grid-container">
+      <table>
+        <thead>
+          <tr>
+            <th>Day</th>
+            <th>Breakfast</th>
+            <th>Lunch</th>
+            <th>Snack</th>
+            <th>Dinner</th>
+            <th>Evening</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Mon</td>
+            <td>
+              <label><input id="mon-bf-1" type="checkbox"> Greek yogurt + berries</label>
+              <label><input id="mon-bf-2" type="checkbox"> Oats</label>
+            </td>
+            <td><label><input id="mon-l-1" type="checkbox"> Chicken salad</label></td>
+            <td><label><input id="mon-s-1" type="checkbox"> Apple + nuts</label></td>
+            <td><label><input id="mon-d-1" type="checkbox"> Salmon + roasted veg</label></td>
+            <td><label><input id="mon-e-1" type="checkbox"> Tea / yogurt / berries</label></td>
+          </tr>
+          <tr>
+            <td>Tue</td>
+            <td><label><input id="tue-bf-1" type="checkbox"> Protein shake + banana</label></td>
+            <td><label><input id="tue-l-1" type="checkbox"> Turkey wrap</label></td>
+            <td><label><input id="tue-s-1" type="checkbox"> Small Greek yogurt</label></td>
+            <td><label><input id="tue-d-1" type="checkbox"> Chicken stir-fry</label></td>
+            <td><label><input id="tue-e-1" type="checkbox"> Tea / yogurt / berries</label></td>
+          </tr>
+          <tr>
+            <td>Wed</td>
+            <td><label><input id="wed-bf-1" type="checkbox"> Oatmeal + protein + fruit</label></td>
+            <td><label><input id="wed-l-1" type="checkbox"> Tuna salad bowl</label></td>
+            <td><label><input id="wed-s-1" type="checkbox"> Carrots + hummus</label></td>
+            <td><label><input id="wed-d-1" type="checkbox"> Beef + roasted veg</label></td>
+            <td><label><input id="wed-e-1" type="checkbox"> Tea / yogurt / berries</label></td>
+          </tr>
+          <tr>
+            <td>Thu</td>
+            <td><label><input id="thu-bf-1" type="checkbox"> Cottage cheese + fruit</label></td>
+            <td><label><input id="thu-l-1" type="checkbox"> Chicken + quinoa</label></td>
+            <td><label><input id="thu-s-1" type="checkbox"> Protein shake</label></td>
+            <td><label><input id="thu-d-1" type="checkbox"> Baked cod + veg</label></td>
+            <td><label><input id="thu-e-1" type="checkbox"> Tea / yogurt / berries</label></td>
+          </tr>
+          <tr>
+            <td>Fri</td>
+            <td><label><input id="fri-bf-1" type="checkbox"> Eggs + toast</label></td>
+            <td><label><input id="fri-l-1" type="checkbox"> Lentil soup + salad</label></td>
+            <td><label><input id="fri-s-1" type="checkbox"> Apple</label></td>
+            <td><label><input id="fri-d-1" type="checkbox"> Chicken fajita plate</label></td>
+            <td><label><input id="fri-e-1" type="checkbox"> Tea / yogurt / berries</label></td>
+          </tr>
+          <tr>
+            <td>Sat</td>
+            <td><label><input id="sat-bf-1" type="checkbox"> Smoothie (protein + fruit)</label></td>
+            <td><label><input id="sat-l-1" type="checkbox"> Salmon salad</label></td>
+            <td><label><input id="sat-s-1" type="checkbox"> Nuts</label></td>
+            <td><label><input id="sat-d-1" type="checkbox"> Turkey meatballs + veg</label></td>
+            <td><label><input id="sat-e-1" type="checkbox"> Tea / yogurt / berries</label></td>
+          </tr>
+          <tr>
+            <td>Sun</td>
+            <td><label><input id="sun-bf-1" type="checkbox"> Yogurt + granola</label></td>
+            <td><label><input id="sun-l-1" type="checkbox"> Chicken Caesar</label></td>
+            <td><label><input id="sun-s-1" type="checkbox"> Protein shake</label></td>
+            <td><label><input id="sun-d-1" type="checkbox"> Shrimp stir-fry</label></td>
+            <td><label><input id="sun-e-1" type="checkbox"> Tea / yogurt / berries</label></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Daily Macros & Targets</h2>
+
+    <div class="macro-row">
+      <div class="macro-label">Calories</div>
+      <div class="macro-values">
+        <span id="calories-total">0</span> / <span id="calories-target">2200</span>
+      </div>
+      <div class="macro-bar">
+        <div id="bar-calories" class="macro-bar-fill"></div>
+      </div>
+    </div>
+
+    <div class="macro-row">
+      <div class="macro-label">Protein</div>
+      <div class="macro-values">
+        <span id="protein-total">0g</span> / <span id="protein-target">150g</span>
+      </div>
+      <div class="macro-bar">
+        <div id="bar-protein" class="macro-bar-fill"></div>
+      </div>
+    </div>
+
+    <div class="macro-row">
+      <div class="macro-label">Carbs</div>
+      <div class="macro-values">
+        <span id="carbs-total">0g</span> / <span id="carbs-target">200g</span>
+      </div>
+      <div class="macro-bar">
+        <div id="bar-carbs" class="macro-bar-fill"></div>
+      </div>
+    </div>
+
+    <div class="macro-row">
+      <div class="macro-label">Fat</div>
+      <div class="macro-values">
+        <span id="fat-total">0g</span> / <span id="fat-target">70g</span>
+      </div>
+      <div class="macro-bar">
+        <div id="bar-fat" class="macro-bar-fill"></div>
+      </div>
+    </div>
+
+    <p class="macro-note">
+      Targets are editable in the script (MACRO_TARGETS). Bars cap at 100% for clarity.
+    </p>
+  </div>
+
+  <div class="section">
+    <h2>Recipe Cards</h2>
+
+    <details open>
+      <summary>Breakfast Recipes</summary>
+
+      <div class="card">
+        <h3>Greek Yogurt + Berries + Oats</h3>
+        <strong>Ingredients:</strong>
+        <ul class="ingredients">
+          <li>1 cup Greek yogurt</li>
+          <li>½–1 cup mixed berries</li>
+          <li>1–2 tbsp oats or granola</li>
+        </ul>
+        <strong>Instructions:</strong>
+        <ul class="instructions">
+          <li>Add yogurt to a bowl.</li>
+          <li>Top with berries.</li>
+          <li>Sprinkle oats or granola and serve.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3>Protein Shake + Banana</h3>
+        <strong>Ingredients:</strong>
+        <ul class="ingredients">
+          <li>1 scoop protein powder</li>
+          <li>250–300 ml water or milk</li>
+          <li>1 banana</li>
+        </ul>
+        <strong>Instructions:</strong>
+        <ul class="instructions">
+          <li>Add protein powder and liquid to shaker.</li>
+          <li>Shake well.</li>
+          <li>Eat banana on the side.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3>Oatmeal + Protein + Fruit</h3>
+        <strong>Ingredients:</strong>
+        <ul class="ingredients">
+          <li>½ cup oats</li>
+          <li>250 ml water or milk</li>
+          <li>½–1 scoop protein powder</li>
+          <li>½–1 cup berries or fruit</li>
+        </ul>
+        <strong>Instructions:</strong>
+        <ul class="instructions">
+          <li>Cook oats with water or milk.</li>
+          <li>Stir in protein powder off the heat.</li>
+          <li>Top with fruit and serve.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3>Cottage Cheese + Fruit</h3>
+        <strong>Ingredients:</strong>
+        <ul class="ingredients">
+          <li>1 cup cottage cheese</li>
+          <li>½–1 cup sliced fruit</li>
+        </ul>
+        <strong>Instructions:</strong>
+        <ul class="instructions">
+          <li>Put cottage cheese in a bowl.</li>
+          <li>Add fruit on top and eat cold.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3>Eggs + Whole-Grain Toast</h3>
+        <strong>Ingredients:</strong>
+        <ul class="ingredients">
+          <li>2 eggs</li>
+          <li>1 slice whole-grain bread</li>
+          <li>Salt, pepper, optional butter</li>
+        </ul>
+        <strong>Instructions:</strong>
+        <ul class="instructions">
+          <li>Cook eggs (scrambled, fried, or boiled).</li>
+          <li>Toast bread.</li>
+          <li>Serve together, season eggs.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3>Smoothie (Protein + Banana + Berries)</h3>
+        <strong>Ingredients:</strong>
+        <ul class="ingredients">
+          <li>1 scoop protein powder</li>
+          <li>1 banana</li>
+          <li>½ cup berries</li>
+          <li>250–300 ml water or milk</li>
+        </ul>
+        <strong>Instructions:</strong>
+        <ul class="instructions">
+          <li>Add all ingredients to blender.</li>
+          <li>Blend until smooth and drink.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3>Yogurt + Granola</h3>
+        <strong>Ingredients:</strong>
+        <ul class="ingredients">
+          <li>1 cup Greek yogurt</li>
+          <li>¼–½ cup granola</li>
+        </ul>
+        <strong>Instructions:</strong>
+        <ul class="instructions">
+          <li>Add yogurt to bowl.</li>
+          <li>Top with granola and serve.</li>
+        </ul>
+      </div>
+    </details>
+
+    <details>
+      <summary>Lunch Recipes</summary>
+
+      <div class="card">
+        <h3>Grilled Chicken Salad</h3>
+        <strong>Ingredients:</strong>
+        <ul class="ingredients">
+          <li>1 chicken breast</li>
+          <li>2 cups mixed greens</li>
+          <li>½ cup chopped veggies</li>
+          <li>1–2 tbsp light vinaigrette</li>
+        </ul>
+        <strong>Instructions:</strong>
+        <ul class="instructions">
+          <li>Cook chicken and slice.</li>
+          <li>Add greens and veggies to a bowl.</li>
+          <li>Top with chicken and drizzle vinaigrette.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3>Turkey Wrap</h3>
+        <strong>Ingredients:</strong>
+        <ul class="ingredients">
+          <li>1 whole-grain wrap</li>
+          <li>3–4 slices turkey</li>
+          <li>Lettuce, tomato</li>
+          <li>Mustard or light spread</li>
+        </ul>
+        <strong>Instructions:</strong>
+        <ul class="instructions">
+          <li>Lay out wrap.</li>
+          <li>Add turkey, lettuce, tomato, and mustard.</li>
+          <li>Roll tightly and slice if desired.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3>Tuna Salad Bowl</h3>
+        <strong>Ingredients:</strong>
+        <ul class="ingredients">
+          <li>1 can tuna (drained)</li>
+          <li>2 cups greens</li>
+          <li>½ cup cucumber/veggies</li>
+          <li>Lemon juice, pepper</li>
+        </ul>
+        <strong>Instructions:</strong>
+        <ul class="instructions">
+          <li>Mix tuna with lemon juice and pepper.</li>
+          <li>Put greens and veggies in a bowl.</li>
+          <li>Top with tuna and serve.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3>Chicken + Quinoa Bowl</h3>
+        <strong>Ingredients:</strong>
+        <ul class="ingredients">
+          <li>1 chicken breast</li>
+          <li>½–1 cup cooked quinoa</li>
+          <li>1 cup spinach or greens</li>
+          <li>1–2 tbsp light dressing</li>
+        </ul>
+        <strong>Instructions:</strong>
+        <ul class="instructions">
+          <li>Cook quinoa and set aside.</li>
+          <li>Cook chicken and slice.</li>
+          <li>Combine quinoa, greens, and chicken in a bowl.</li>
+          <li>Add dressing and toss.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3>Lentil Soup + Side Salad</h3>
+        <strong>Ingredients:</strong>
+        <ul class="ingredients">
+          <li>1 bowl lentil soup</li>
+          <li>1–2 cups mixed greens</li>
+          <li>½ cup veggies</li>
+          <li>1–2 tbsp light dressing</li>
+        </ul>
+        <strong>Instructions:</strong>
+        <ul class="instructions">
+          <li>Heat lentil soup.</li>
+          <li>Make salad with greens and veggies.</li>
+          <li>Dress salad lightly and serve with soup.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3>Salmon Salad</h3>
+        <strong>Ingredients:</strong>
+        <ul class="ingredients">
+          <li>1 salmon fillet</li>
+          <li>2 cups greens</li>
+          <li>½ cup cucumber/veggies</li>
+          <li>Lemon dressing</li>
+        </ul>
+        <strong>Instructions:</strong>
+        <ul class="instructions">
+          <li>Cook salmon and let cool slightly.</li>
+          <li>Add greens and veggies to a bowl.</li>
+          <li>Flake or slice salmon on top.</li>
+          <li>Add lemon dressing.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3>Chicken Caesar Salad</h3>
+        <strong>Ingredients:</strong>
+        <ul class="ingredients">
+          <li>1 chicken breast</li>
+          <li>2 cups romaine lettuce</li>
+          <li>1–2 tbsp light Caesar dressing</li>
+          <li>Optional: small sprinkle parmesan</li>
+        </ul>
+        <strong>Instructions:</strong>
+        <ul class="instructions">
+          <li>Cook chicken and slice.</li>
+          <li>Toss romaine with dressing.</li>
+          <li>Top with chicken and parmesan.</li>
+        </ul>
+      </div>
+    </details>
+
+    <details>
+      <summary>Snack Recipes</summary>
+
+      <div class="card">
+        <h3>Apple + Nuts</h3>
+        <strong>Ingredients:</strong>
+        <ul class="ingredients">
+          <li>1 apple</li>
+          <li>Small handful nuts (about ¼ cup)</li>
+        </ul>
+        <strong>Instructions:</strong>
+        <ul class="instructions">
+          <li>Slice apple if desired.</li>
+          <li>Serve with nuts.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3>Small Greek Yogurt</h3>
+        <strong>Ingredients:</strong>
+        <ul class="ingredients">
+          <li>½ cup Greek yogurt</li>
+        </ul>
+        <strong>Instructions:</strong>
+        <ul class="instructions">
+          <li>Scoop into bowl and eat.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3>Carrots + Hummus</h3>
+        <strong>Ingredients:</strong>
+        <ul class="ingredients">
+          <li>1–2 carrots</li>
+          <li>2–3 tbsp hummus</li>
+        </ul>
+        <strong>Instructions:</strong>
+        <ul class="instructions">
+          <li>Slice carrots into sticks.</li>
+          <li>Serve with hummus for dipping.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3>Protein Shake (Snack)</h3>
+        <strong>Ingredients:</strong>
+        <ul class="ingredients">
+          <li>1 scoop protein powder</li>
+          <li>250–300 ml water or milk</li>
+        </ul>
+        <strong>Instructions:</strong>
+        <ul class="instructions">
+          <li>Add powder and liquid to shaker.</li>
+          <li>Shake and drink.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3>Nuts (Snack)</h3>
+        <strong>Ingredients:</strong>
+        <ul class="ingredients">
+          <li>Small handful nuts (about ¼ cup)</li>
+        </ul>
+        <strong>Instructions:</strong>
+        <ul class="instructions">
+          <li>Portion into a small bowl and eat.</li>
+        </ul>
+      </div>
+    </details>
+
+    <details>
+      <summary>Dinner Recipes</summary>
+
+      <div class="card">
+        <h3>Salmon + Roasted Vegetables</h3>
+        <strong>Ingredients:</strong>
+        <ul class="ingredients">
+          <li>1 salmon fillet</li>
+          <li>2 cups mixed vegetables</li>
+          <li>1–2 tbsp olive oil</li>
+          <li>Salt, pepper</li>
+        </ul>
+        <strong>Instructions:</strong>
+        <ul class="instructions">
+          <li>Preheat oven to 400°F (200°C).</li>
+          <li>Place salmon on baking sheet; season.</li>
+          <li>Toss veggies with olive oil, salt, pepper; spread around salmon.</li>
+          <li>Bake 15–20 minutes until salmon is cooked and veggies are tender.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3>Chicken Stir-Fry</h3>
+        <strong>Ingredients:</strong>
+        <ul class="ingredients">
+          <li>1 chicken breast, sliced</li>
+          <li>2 cups mixed veggies</li>
+          <li>1–2 tbsp soy sauce</li>
+          <li>1 tsp oil</li>
+        </ul>
+        <strong>Instructions:</strong>
+        <ul class="instructions">
+          <li>Heat oil in pan.</li>
+          <li>Cook chicken until browned.</li>
+          <li>Add veggies and stir-fry 5–7 minutes.</li>
+          <li>Add soy sauce, toss, and serve.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3>Beef + Roasted Vegetables</h3>
+        <strong>Ingredients:</strong>
+        <ul class="ingredients">
+          <li>4–5 oz lean beef strips</li>
+          <li>2 cups mixed vegetables</li>
+          <li>1–2 tbsp olive oil</li>
+          <li>Salt, pepper</li>
+        </ul>
+        <strong>Instructions:</strong>
+        <ul class="instructions">
+          <li>Roast veggies at 400°F for ~20 minutes with oil, salt, pepper.</li>
+          <li>Pan-sear beef strips until cooked.</li>
+          <li>Serve beef over roasted veggies.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3>Baked Cod + Vegetables</h3>
+        <strong>Ingredients:</strong>
+        <ul class="ingredients">
+          <li>1 cod fillet</li>
+          <li>2 cups vegetables</li>
+          <li>1–2 tbsp olive oil</li>
+          <li>Salt, pepper, lemon</li>
+        </ul>
+        <strong>Instructions:</strong>
+        <ul class="instructions">
+          <li>Preheat oven to 400°F.</li>
+          <li>Place cod on baking sheet; season and drizzle with oil.</li>
+          <li>Add veggies around fish, toss with oil.</li>
+          <li>Bake 12–15 minutes until fish flakes easily.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3>Chicken Fajita Plate</h3>
+        <strong>Ingredients:</strong>
+        <ul class="ingredients">
+          <li>1 chicken breast, sliced</li>
+          <li>1 bell pepper, sliced</li>
+          <li>½ onion, sliced</li>
+          <li>Fajita seasoning</li>
+        </ul>
+        <strong>Instructions:</strong>
+        <ul class="instructions">
+          <li>Cook chicken in pan until browned.</li>
+          <li>Add peppers and onions.</li>
+          <li>Sprinkle fajita seasoning and cook until veggies are tender.</li>
+          <li>Serve on a plate (no tortilla needed).</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3>Turkey Meatballs + Vegetables</h3>
+        <strong>Ingredients:</strong>
+        <ul class="ingredients">
+          <li>8 oz ground turkey</li>
+          <li>Salt, pepper, herbs</li>
+          <li>2 cups vegetables</li>
+          <li>1–2 tbsp olive oil</li>
+        </ul>
+        <strong>Instructions:</strong>
+        <ul class="instructions">
+          <li>Mix turkey with seasoning; form small meatballs.</li>
+          <li>Bake at 400°F for 15–20 minutes.</li>
+          <li>Roast veggies separately with oil, salt, pepper.</li>
+          <li>Serve meatballs with veggies; add tomato sauce if you like.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3>Shrimp Stir-Fry</h3>
+        <strong>Ingredients:</strong>
+        <ul class="ingredients">
+          <li>4–5 oz shrimp, peeled</li>
+          <li>1–2 cups broccoli or mixed veggies</li>
+          <li>1 tsp oil</li>
+          <li>Garlic, ginger, soy sauce (optional)</li>
+        </ul>
+        <strong>Instructions:</strong>
+        <ul class="instructions">
+          <li>Heat oil in pan.</li>
+          <li>Cook shrimp until pink.</li>
+          <li>Add garlic and ginger, then veggies.</li>
+          <li>Stir-fry 3–4 minutes; add a splash of soy if desired.</li>
+        </ul>
+      </div>
+    </details>
+
+    <details>
+      <summary>Evening Items</summary>
+
+      <div class="card">
+        <h3>Herbal Tea / Small Yogurt / Berries</h3>
+        <strong>Herbal Tea:</strong>
+        <ul class="instructions">
+          <li>Steep tea bag in hot water 3–5 minutes.</li>
+        </ul>
+        <strong>Small Yogurt:</strong>
+        <ul class="instructions">
+          <li>Scoop a small portion into a bowl and eat.</li>
+        </ul>
+        <strong>Berries:</strong>
+        <ul class="instructions">
+          <li>Rinse and serve in a small bowl.</li>
+        </ul>
+      </div>
+    </details>
+  </div>
+
+</div>
+</body>
+</html>
