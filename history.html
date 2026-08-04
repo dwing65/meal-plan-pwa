@@ -130,6 +130,20 @@
     font-size: 0.7rem;
     color: #fff;
   }
+  #toast {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: var(--accent);
+    color: white;
+    padding: 10px 16px;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    opacity: 0;
+    transition: opacity 0.3s ease-out;
+    pointer-events: none;
+    z-index: 9999;
+  }
   @media (max-width: 600px) {
     .wrapper {
       padding: 10px;
@@ -138,8 +152,21 @@
 </style>
 
 <script>
+  const APP_VERSION = "5.0";
   const THEME_KEY = "mealPlanTheme_v4";
   const DAILY_LOGS_KEY = "mealPlanDailyLogs_v4";
+  const FOOD_DB_KEY = "mealPlanFoodDB_v4";
+  const MEAL_MULTI_KEY = "mealPlanMulti_v4";
+
+  function showToast(msg) {
+    const t = document.getElementById("toast");
+    if (!t) return;
+    t.textContent = msg;
+    t.style.opacity = 1;
+    setTimeout(() => {
+      t.style.opacity = 0;
+    }, 2000);
+  }
 
   function loadTheme() {
     const saved = localStorage.getItem(THEME_KEY);
@@ -148,6 +175,120 @@
   function toggleTheme() {
     const isDark = document.body.classList.toggle("dark");
     localStorage.setItem(THEME_KEY, isDark ? "dark" : "light");
+  }
+
+  function migrateFoodDB() {
+    const saved = localStorage.getItem(FOOD_DB_KEY);
+    if (!saved) return;
+
+    let db;
+    try { db = JSON.parse(saved); }
+    catch { return; }
+
+    let changed = false;
+    const now = new Date().toISOString();
+
+    Object.keys(db).forEach(name => {
+      const item = db[name];
+
+      if (!item.per100g || typeof item.per100g !== "object") {
+        item.per100g = {};
+        changed = true;
+      }
+
+      const fields = [
+        "calories","protein","carbs","fat","fiber","sugar",
+        "saturatedFat","cholesterol","sodium","potassium"
+      ];
+
+      fields.forEach(f => {
+        if (typeof item.per100g[f] !== "number") {
+          item.per100g[f] = 0;
+          changed = true;
+        }
+      });
+
+      if (typeof item.defaultGrams !== "number") {
+        item.defaultGrams = 100;
+        changed = true;
+      }
+
+      if (!item.createdAt) {
+        item.createdAt = now;
+        changed = true;
+      }
+
+      if (!item.updatedAt) {
+        item.updatedAt = now;
+        changed = true;
+      }
+    });
+
+    if (changed) {
+      localStorage.setItem(FOOD_DB_KEY, JSON.stringify(db));
+      console.log("Food DB migrated.");
+    }
+  }
+
+  function migrateMealPlanMulti() {
+    const saved = localStorage.getItem(MEAL_MULTI_KEY);
+    if (!saved) return;
+
+    let meals;
+    try { meals = JSON.parse(saved); }
+    catch { return; }
+
+    let changed = false;
+
+    Object.keys(meals).forEach(mealKey => {
+      const arr = meals[mealKey];
+
+      if (typeof arr === "string") {
+        meals[mealKey] = [{ food: arr, grams: 0 }];
+        changed = true;
+        return;
+      }
+
+      if (!Array.isArray(arr)) {
+        meals[mealKey] = [];
+        changed = true;
+        return;
+      }
+
+      meals[mealKey] = arr.map(item => {
+        if (!item || typeof item !== "object") {
+          changed = true;
+          return { food: "", grams: 0 };
+        }
+
+        if (typeof item.food !== "string") {
+          item.food = "";
+          changed = true;
+        }
+
+        if (typeof item.grams !== "number") {
+          item.grams = 0;
+          changed = true;
+        }
+
+        return item;
+      });
+    });
+
+    if (changed) {
+      localStorage.setItem(MEAL_MULTI_KEY, JSON.stringify(meals));
+      console.log("mealPlanMulti migrated.");
+    }
+  }
+
+  function checkVersion() {
+    const stored = localStorage.getItem("mealPlanVersion");
+    if (stored !== APP_VERSION) {
+      console.log("Version changed → running migrations");
+      migrateFoodDB();
+      migrateMealPlanMulti();
+      localStorage.setItem("mealPlanVersion", APP_VERSION);
+    }
   }
 
   function loadDailyLogs() {
@@ -246,7 +387,7 @@
 
         const lbl = document.createElement("div");
         lbl.className = "chart-bar-label";
-        lbl.textContent = d.date.slice(5); // MM-DD
+        lbl.textContent = d.date.slice(5);
 
         bar.appendChild(fill);
         bar.appendChild(lbl);
@@ -309,6 +450,7 @@
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+    showToast("CSV exported");
   }
 
   if ("serviceWorker" in navigator) {
@@ -319,7 +461,10 @@
   }
 
   document.addEventListener("DOMContentLoaded", () => {
+    checkVersion();
     loadTheme();
+    migrateFoodDB();
+    migrateMealPlanMulti();
     renderDailyTable();
     renderWeeklyCharts();
     document.getElementById("export-csv").addEventListener("click", exportCSV);
@@ -372,5 +517,6 @@
   </div>
 
 </div>
+<div id="toast"></div>
 </body>
 </html>
