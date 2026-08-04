@@ -1,533 +1,93 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<title>Food Database</title>
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Foods</title>
 
-<link rel="manifest" href="manifest.json">
-<link rel="icon" href="icons/icon-192.png">
-<meta name="theme-color" content="#121212" />
+  <!-- IMPORTANT: Firebase + Firestore scripts must already be in index.html -->
+  <!-- foods.html will reuse the same global db + sync functions -->
 
-<style>
-  :root {
-    --bg: #f7f7f7;
-    --card-bg: #ffffff;
-    --text: #222;
-    --border: #ddd;
-    --accent: #0077cc;
-    --accent-soft: #cfe6ff;
-  }
-  body.dark {
-    --bg: #121212;
-    --card-bg: #1e1e1e;
-    --text: #f5f5f5;
-    --border: #333;
-    --accent: #4da3ff;
-    --accent-soft: #203a5c;
-  }
-  body {
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    margin: 0;
-    background: var(--bg);
-    color: var(--text);
-    line-height: 1.5;
-  }
-  .wrapper {
-    max-width: 960px;
-    margin: 0 auto;
-    padding: 16px;
-  }
-  .top-bar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
-    margin-bottom: 12px;
-  }
-  .top-bar h1 {
-    margin: 0;
-  }
-  .nav-links a {
-    margin-right: 8px;
-    font-size: 0.9rem;
-    text-decoration: none;
-    color: var(--accent);
-  }
-  .section {
-    background: var(--card-bg);
-    padding: 12px;
-    border-radius: 8px;
-    border: 1px solid var(--border);
-    margin-bottom: 16px;
-  }
-  label {
-    display: block;
-    margin: 4px 0;
-    font-size: 0.85rem;
-  }
-  input[type=text], input[type=number] {
-    width: 100%;
-    box-sizing: border-box;
-    padding: 4px 6px;
-    font-size: 0.85rem;
-  }
-  button {
-    padding: 6px 10px;
-    font-size: 0.9rem;
-    cursor: pointer;
-    border-radius: 4px;
-    border: 1px solid var(--border);
-    background: var(--card-bg);
-    color: var(--text);
-    margin-right: 6px;
-    margin-top: 4px;
-  }
-  button:hover {
-    border-color: var(--accent);
-  }
-  .food-card {
-    border-top: 1px solid var(--border);
-    padding-top: 8px;
-    margin-top: 8px;
-  }
-  .food-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 8px;
-  }
-  .food-header h3 {
-    margin: 0;
-    font-size: 1rem;
-  }
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    gap: 8px;
-    margin-top: 6px;
-  }
-  .timestamp {
-    font-size: 0.75rem;
-    opacity: 0.7;
-    margin-top: 2px;
-  }
-  #toast {
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    background: var(--accent);
-    color: white;
-    padding: 10px 16px;
-    border-radius: 6px;
-    font-size: 0.9rem;
-    opacity: 0;
-    transition: opacity 0.3s ease-out;
-    pointer-events: none;
-    z-index: 9999;
-  }
-  @media (max-width: 600px) {
-    .wrapper {
-      padding: 10px;
+  <script>
+    /* -----------------------------------------
+       LOAD FOOD DATABASE (cloud → local)
+       ----------------------------------------- */
+
+    async function loadFoods() {
+      // Fallback if cloud has no data yet
+      const defaultFoodDB = [];
+
+      // Load cloud version (or upload fallback)
+      window.foodDB = await loadSynced("mealPlanFoodDB_v4", defaultFoodDB);
+
+      // Now render the foods list
+      renderFoods();
     }
-  }
-</style>
 
-<script>
-  const APP_VERSION = "5.0";
-  const THEME_KEY = "mealPlanTheme_v4";
-  const FOOD_DB_KEY = "mealPlanFoodDB_v4";
-  const MEAL_MULTI_KEY = "mealPlanMulti_v4";
+    /* -----------------------------------------
+       SAVE FOOD DATABASE (local → cloud)
+       ----------------------------------------- */
 
-  function showToast(msg) {
-    const t = document.getElementById("toast");
-    if (!t) return;
-    t.textContent = msg;
-    t.style.opacity = 1;
-    setTimeout(() => {
-      t.style.opacity = 0;
-    }, 2000);
-  }
+    function saveFoods() {
+      localStorage.setItem("mealPlanFoodDB_v4", JSON.stringify(foodDB));
+      syncToCloud("mealPlanFoodDB_v4", foodDB);   // NEW: cloud sync
+    }
 
-  function loadTheme() {
-    const saved = localStorage.getItem(THEME_KEY);
-    if (saved === "dark") document.body.classList.add("dark");
-  }
-  function toggleTheme() {
-    const isDark = document.body.classList.toggle("dark");
-    localStorage.setItem(THEME_KEY, isDark ? "dark" : "light");
-  }
+    /* -----------------------------------------
+       RENDER + UI LOGIC
+       ----------------------------------------- */
 
-  function migrateFoodDB() {
-    const saved = localStorage.getItem(FOOD_DB_KEY);
-    if (!saved) return;
+    function renderFoods() {
+      const list = document.getElementById("foodsList");
+      list.innerHTML = "";
 
-    let db;
-    try { db = JSON.parse(saved); }
-    catch { return; }
+      foodDB.forEach((item, index) => {
+        const li = document.createElement("li");
+        li.textContent = item.name;
 
-    let changed = false;
-    const now = new Date().toISOString();
+        // Example delete button
+        const del = document.createElement("button");
+        del.textContent = "Delete";
+        del.onclick = () => {
+          foodDB.splice(index, 1);
+          saveFoods();     // cloud + local
+          renderFoods();
+        };
 
-    Object.keys(db).forEach(name => {
-      const item = db[name];
-
-      if (!item.per100g || typeof item.per100g !== "object") {
-        item.per100g = {};
-        changed = true;
-      }
-
-      const fields = [
-        "calories","protein","carbs","fat","fiber","sugar",
-        "saturatedFat","cholesterol","sodium","potassium"
-      ];
-
-      fields.forEach(f => {
-        if (typeof item.per100g[f] !== "number") {
-          item.per100g[f] = 0;
-          changed = true;
-        }
+        li.appendChild(del);
+        list.appendChild(li);
       });
-
-      if (typeof item.defaultGrams !== "number") {
-        item.defaultGrams = 100;
-        changed = true;
-      }
-
-      if (!item.createdAt) {
-        item.createdAt = now;
-        changed = true;
-      }
-
-      if (!item.updatedAt) {
-        item.updatedAt = now;
-        changed = true;
-      }
-    });
-
-    if (changed) {
-      localStorage.setItem(FOOD_DB_KEY, JSON.stringify(db));
-      console.log("Food DB migrated.");
-    }
-  }
-
-  function migrateMealPlanMulti() {
-    const saved = localStorage.getItem(MEAL_MULTI_KEY);
-    if (!saved) return;
-
-    let meals;
-    try { meals = JSON.parse(saved); }
-    catch { return; }
-
-    let changed = false;
-
-    Object.keys(meals).forEach(mealKey => {
-      const arr = meals[mealKey];
-
-      if (typeof arr === "string") {
-        meals[mealKey] = [{ food: arr, grams: 0 }];
-        changed = true;
-        return;
-      }
-
-      if (!Array.isArray(arr)) {
-        meals[mealKey] = [];
-        changed = true;
-        return;
-      }
-
-      meals[mealKey] = arr.map(item => {
-        if (!item || typeof item !== "object") {
-          changed = true;
-          return { food: "", grams: 0 };
-        }
-
-        if (typeof item.food !== "string") {
-          item.food = "";
-          changed = true;
-        }
-
-        if (typeof item.grams !== "number") {
-          item.grams = 0;
-          changed = true;
-        }
-
-        return item;
-      });
-    });
-
-    if (changed) {
-      localStorage.setItem(MEAL_MULTI_KEY, JSON.stringify(meals));
-      console.log("mealPlanMulti migrated.");
-    }
-  }
-
-  function checkVersion() {
-    const stored = localStorage.getItem("mealPlanVersion");
-    if (stored !== APP_VERSION) {
-      console.log("Version changed → running migrations");
-      migrateFoodDB();
-      migrateMealPlanMulti();
-      localStorage.setItem("mealPlanVersion", APP_VERSION);
-    }
-  }
-
-  function loadFoodDB() {
-    const saved = localStorage.getItem(FOOD_DB_KEY);
-    if (!saved) return {};
-    try { return JSON.parse(saved); } catch { return {}; }
-  }
-
-  function saveFoodDB(db) {
-    localStorage.setItem(FOOD_DB_KEY, JSON.stringify(db));
-  }
-
-  function renderFoodList() {
-    const db = loadFoodDB();
-    const container = document.getElementById("food-list");
-    container.innerHTML = "";
-
-    const names = Object.keys(db).sort();
-    if (names.length === 0) {
-      container.textContent = "No foods defined yet. Add one above.";
-      return;
     }
 
-    names.forEach(name => {
-      const food = db[name];
-      const card = document.createElement("div");
-      card.className = "food-card";
+    /* -----------------------------------------
+       ADD NEW FOOD ITEM
+       ----------------------------------------- */
 
-      const header = document.createElement("div");
-      header.className = "food-header";
+    function addFood() {
+      const name = document.getElementById("newFood").value.trim();
+      if (!name) return;
 
-      const title = document.createElement("h3");
-      title.textContent = name;
-      header.appendChild(title);
+      foodDB.push({ name });
+      saveFoods();     // cloud + local
+      renderFoods();
 
-      const btnRow = document.createElement("div");
-      const editBtn = document.createElement("button");
-      editBtn.textContent = "Edit";
-      editBtn.addEventListener("click", () => populateForm(name, food));
-      const deleteBtn = document.createElement("button");
-      deleteBtn.textContent = "Delete";
-      deleteBtn.addEventListener("click", () => deleteFood(name));
-      btnRow.appendChild(editBtn);
-      btnRow.appendChild(deleteBtn);
-      header.appendChild(btnRow);
-
-      card.appendChild(header);
-
-      const created = document.createElement("div");
-      created.className = "timestamp";
-      created.textContent = "Created: " + (food.createdAt ? new Date(food.createdAt).toLocaleString() : "N/A");
-
-      const updated = document.createElement("div");
-      updated.className = "timestamp";
-      updated.textContent = "Updated: " + (food.updatedAt ? new Date(food.updatedAt).toLocaleString() : "N/A");
-
-      card.appendChild(created);
-      card.appendChild(updated);
-
-      const grid = document.createElement("div");
-      grid.className = "grid";
-
-      const fields = [
-        ["Calories (per 100g)", food.per100g.calories],
-        ["Protein (g/100g)", food.per100g.protein],
-        ["Carbs (g/100g)", food.per100g.carbs],
-        ["Fat (g/100g)", food.per100g.fat],
-        ["Fiber (g/100g)", food.per100g.fiber],
-        ["Sugar (g/100g)", food.per100g.sugar],
-        ["Sat. fat (g/100g)", food.per100g.saturatedFat],
-        ["Cholesterol (mg/100g)", food.per100g.cholesterol],
-        ["Sodium (mg/100g)", food.per100g.sodium],
-        ["Potassium (mg/100g)", food.per100g.potassium],
-        ["Default grams", food.defaultGrams]
-      ];
-
-      fields.forEach(([label, value]) => {
-        const div = document.createElement("div");
-        const l = document.createElement("div");
-        l.style.fontSize = "0.8rem";
-        l.style.opacity = "0.8";
-        l.textContent = label;
-        const v = document.createElement("div");
-        v.textContent = value;
-        div.appendChild(l);
-        div.appendChild(v);
-        grid.appendChild(div);
-      });
-
-      card.appendChild(grid);
-      container.appendChild(card);
-    });
-  }
-
-  function deleteFood(name) {
-    const db = loadFoodDB();
-    if (!db[name]) return;
-    if (!confirm(`Delete "${name}" from food database?`)) return;
-    delete db[name];
-    saveFoodDB(db);
-    renderFoodList();
-    showToast("Food deleted");
-  }
-
-  function clearForm() {
-    document.getElementById("food-name").value = "";
-    document.getElementById("calories").value = "";
-    document.getElementById("protein").value = "";
-    document.getElementById("carbs").value = "";
-    document.getElementById("fat").value = "";
-    document.getElementById("fiber").value = "";
-    document.getElementById("sugar").value = "";
-    document.getElementById("satfat").value = "";
-    document.getElementById("cholesterol").value = "";
-    document.getElementById("sodium").value = "";
-    document.getElementById("potassium").value = "";
-    document.getElementById("default-grams").value = "";
-  }
-
-  function populateForm(name, food) {
-    document.getElementById("food-name").value = name;
-    document.getElementById("calories").value = food.per100g.calories;
-    document.getElementById("protein").value = food.per100g.protein;
-    document.getElementById("carbs").value = food.per100g.carbs;
-    document.getElementById("fat").value = food.per100g.fat;
-    document.getElementById("fiber").value = food.per100g.fiber;
-    document.getElementById("sugar").value = food.per100g.sugar;
-    document.getElementById("satfat").value = food.per100g.saturatedFat;
-    document.getElementById("cholesterol").value = food.per100g.cholesterol;
-    document.getElementById("sodium").value = food.per100g.sodium;
-    document.getElementById("potassium").value = food.per100g.potassium;
-    document.getElementById("default-grams").value = food.defaultGrams;
-  }
-
-  function saveFoodFromForm() {
-    const name = document.getElementById("food-name").value.trim();
-    if (!name) {
-      alert("Food name is required.");
-      return;
+      document.getElementById("newFood").value = "";
     }
 
-    const num = id => parseFloat(document.getElementById(id).value) || 0;
+    /* -----------------------------------------
+       STARTUP
+       ----------------------------------------- */
 
-    const now = new Date().toISOString();
-    const db = loadFoodDB();
-    const existing = db[name];
-
-    const food = {
-      per100g: {
-        calories:     num("calories"),
-        protein:      num("protein"),
-        carbs:        num("carbs"),
-        fat:          num("fat"),
-        fiber:        num("fiber"),
-        sugar:        num("sugar"),
-        saturatedFat: num("satfat"),
-        cholesterol:  num("cholesterol"),
-        sodium:       num("sodium"),
-        potassium:    num("potassium")
-      },
-      defaultGrams: num("default-grams") || 100,
-      createdAt: existing && existing.createdAt ? existing.createdAt : now,
-      updatedAt: now
-    };
-
-    db[name] = food;
-    saveFoodDB(db);
-    renderFoodList();
-    showToast("Food saved");
-  }
-
-  if ("serviceWorker" in navigator) {
-    window.addEventListener("load", () => {
-      navigator.serviceWorker.register("service-worker.js")
-        .catch(err => console.error("SW registration failed", err));
-    });
-  }
-
-  document.addEventListener("DOMContentLoaded", () => {
-    checkVersion();
-    loadTheme();
-    migrateFoodDB();
-    renderFoodList();
-    document.getElementById("save-food").addEventListener("click", saveFoodFromForm);
-    document.getElementById("clear-form").addEventListener("click", clearForm);
-  });
-</script>
+    window.addEventListener("DOMContentLoaded", loadFoods);
+  </script>
 </head>
+
 <body>
-<div class="wrapper">
+  <h1>Foods</h1>
 
-  <div class="top-bar">
-    <div>
-      <h1>Food Database</h1>
-      <div class="nav-links">
-        <a href="index.html">Dashboard</a>
-        <a href="foods.html">Food Database</a>
-        <a href="history.html">History</a>
-      </div>
-    </div>
-    <div>
-      <button type="button" onclick="toggleTheme()">Toggle Dark Mode</button>
-    </div>
-  </div>
+  <input id="newFood" placeholder="Add food">
+  <button onclick="addFood()">Add</button>
 
-  <div class="section">
-    <h2>Add / Edit Food</h2>
-    <label>Food name
-      <input type="text" id="food-name" placeholder="e.g., Greek yogurt + berries">
-    </label>
-
-    <div class="grid">
-      <label>Calories (per 100g)
-        <input type="number" id="calories" step="0.1">
-      </label>
-      <label>Protein (g/100g)
-        <input type="number" id="protein" step="0.1">
-      </label>
-      <label>Carbs (g/100g)
-        <input type="number" id="carbs" step="0.1">
-      </label>
-      <label>Fat (g/100g)
-        <input type="number" id="fat" step="0.1">
-      </label>
-      <label>Fiber (g/100g)
-        <input type="number" id="fiber" step="0.1">
-      </label>
-      <label>Sugar (g/100g)
-        <input type="number" id="sugar" step="0.1">
-      </label>
-      <label>Sat. fat (g/100g)
-        <input type="number" id="satfat" step="0.1">
-      </label>
-      <label>Cholesterol (mg/100g)
-        <input type="number" id="cholesterol" step="0.1">
-      </label>
-      <label>Sodium (mg/100g)
-        <input type="number" id="sodium" step="0.1">
-      </label>
-      <label>Potassium (mg/100g)
-        <input type="number" id="potassium" step="0.1">
-      </label>
-      <label>Default grams (serving size)
-        <input type="number" id="default-grams" step="1">
-      </label>
-    </div>
-
-    <button id="save-food" type="button">Save Food</button>
-    <button id="clear-form" type="button">Clear Form</button>
-  </div>
-
-  <div class="section">
-    <h2>Current Foods</h2>
-    <div id="food-list"></div>
-  </div>
-
-</div>
-<div id="toast"></div>
+  <ul id="foodsList"></ul>
 </body>
 </html>

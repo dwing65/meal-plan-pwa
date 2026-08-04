@@ -1,898 +1,210 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<title>Meal-Plan & Nutrition Dashboard</title>
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Meal Plan PWA</title>
 
-<link rel="manifest" href="manifest.json">
-<link rel="icon" href="icons/icon-192.png">
-<meta name="theme-color" content="#121212" />
+  <link rel="manifest" href="/manifest.json">
 
-<style>
-  :root {
-    --bg: #f7f7f7;
-    --card-bg: #ffffff;
-    --text: #222;
-    --border: #ddd;
-    --accent: #0077cc;
-    --accent-soft: #cfe6ff;
-  }
-  body.dark {
-    --bg: #121212;
-    --card-bg: #1e1e1e;
-    --text: #f5f5f5;
-    --border: #333;
-    --accent: #4da3ff;
-    --accent-soft: #203a5c;
-  }
-  body {
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    margin: 0;
-    background: var(--bg);
-    color: var(--text);
-    line-height: 1.5;
-  }
-  .wrapper {
-    max-width: 960px;
-    margin: 0 auto;
-    padding: 16px;
-  }
-  .top-bar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
-    margin-bottom: 12px;
-  }
-  .top-bar h1 {
-    margin: 0;
-  }
-  .nav-links a {
-    margin-right: 8px;
-    font-size: 0.9rem;
-    text-decoration: none;
-    color: var(--accent);
-  }
-  .section {
-    background: var(--card-bg);
-    padding: 12px;
-    border-radius: 8px;
-    border: 1px solid var(--border);
-    margin-bottom: 16px;
-  }
-  button {
-    padding: 6px 10px;
-    font-size: 0.9rem;
-    cursor: pointer;
-    border-radius: 4px;
-    border: 1px solid var(--border);
-    background: var(--card-bg);
-    color: var(--text);
-  }
-  button:hover {
-    border-color: var(--accent);
-  }
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    background: var(--card-bg);
-    min-width: 600px;
-  }
-  th, td {
-    border: 1px solid var(--border);
-    padding: 6px 8px;
-    font-size: 0.85rem;
-    vertical-align: top;
-  }
-  th {
-    text-align: left;
-    background: rgba(0,0,0,0.03);
-  }
-  .meal-container {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-  .meal-item {
-    display: flex;
-    gap: 4px;
-    align-items: center;
-  }
-  .meal-item select {
-    flex: 2;
-  }
-  .meal-item input[type=number] {
-    flex: 1;
-  }
-  .meal-item button {
-    flex: 0 0 auto;
-  }
-  select, input[type=number] {
-    width: 100%;
-    box-sizing: border-box;
-    margin: 2px 0;
-    padding: 3px 4px;
-    font-size: 0.8rem;
-  }
-  .macro-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin: 4px 0;
-    font-size: 0.9rem;
-  }
-  .macro-label {
-    min-width: 90px;
-  }
-  .macro-values {
-    min-width: 140px;
-  }
-  .macro-bar {
-    flex: 1;
-    height: 10px;
-    border-radius: 999px;
-    background: var(--accent-soft);
-    overflow: hidden;
-  }
-  .macro-bar-fill {
-    height: 100%;
-    background: var(--accent);
-    width: 0%;
-    transition: width 0.2s ease-out;
-  }
-  .macro-note {
-    font-size: 0.8rem;
-    opacity: 0.8;
-    margin-top: 4px;
-  }
-  #toast {
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    background: var(--accent);
-    color: white;
-    padding: 10px 16px;
-    border-radius: 6px;
-    font-size: 0.9rem;
-    opacity: 0;
-    transition: opacity 0.3s ease-out;
-    pointer-events: none;
-    z-index: 9999;
-  }
-  @media (max-width: 600px) {
-    .wrapper {
-      padding: 10px;
-    }
-    table {
-      font-size: 0.75rem;
-    }
-    .top-bar {
-      flex-direction: column;
-      align-items: flex-start;
-    }
-  }
-  @media print {
-    body {
-      background: #ffffff;
-      color: #000000;
-    }
-    .top-bar button {
-      display: none;
-    }
-    .nav-links {
-      display: none;
-    }
-    .wrapper {
-      max-width: none;
-      margin: 0;
-      padding: 0;
-    }
-  }
-</style>
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js"></script>
 
-<script>
-  const APP_VERSION = "5.0";
-  const THEME_KEY = "mealPlanTheme_v4";
-  const FOOD_DB_KEY = "mealPlanFoodDB_v4";
-  const MEAL_MULTI_KEY = "mealPlanMulti_v4";
-  const DAILY_TOTALS_KEY = "mealPlanDailyTotals_v4";
-  const DAILY_LOGS_KEY = "mealPlanDailyLogs_v4";
-
-  const TARGETS = {
-    calories: 2200,
-    protein: 150,
-    carbs: 200,
-    fat: 70,
-    fiber: 30,
-    sugar: 40,
-    saturatedFat: 20,
-    cholesterol: 300,
-    sodium: 2300,
-    potassium: 3500
-  };
-
-  const DEFAULT_FOOD_DB = {
-    "Greek yogurt + berries": {
-      per100g: {
-        calories: 95, protein: 8, carbs: 12, fat: 2,
-        fiber: 1, sugar: 9, saturatedFat: 1,
-        cholesterol: 5, sodium: 36, potassium: 150
-      },
-      defaultGrams: 150,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    },
-    "Oats": {
-      per100g: {
-        calories: 389, protein: 17, carbs: 66, fat: 7,
-        fiber: 10, sugar: 1, saturatedFat: 1,
-        cholesterol: 0, sodium: 2, potassium: 350
-      },
-      defaultGrams: 40,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    },
-    "Chicken salad": {
-      per100g: {
-        calories: 180, protein: 22, carbs: 4, fat: 8,
-        fiber: 2, sugar: 2, saturatedFat: 2,
-        cholesterol: 60, sodium: 350, potassium: 250
-      },
-      defaultGrams: 220,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    },
-    "Turkey wrap": {
-      per100g: {
-        calories: 210, protein: 18, carbs: 20, fat: 7,
-        fiber: 3, sugar: 3, saturatedFat: 2,
-        cholesterol: 40, sodium: 500, potassium: 200
-      },
-      defaultGrams: 200,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    },
-    "Apple": {
-      per100g: {
-        calories: 52, protein: 0.3, carbs: 14, fat: 0.2,
-        fiber: 2.4, sugar: 10, saturatedFat: 0,
-        cholesterol: 0, sodium: 1, potassium: 107
-      },
-      defaultGrams: 120,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    },
-    "Nuts": {
-      per100g: {
-        calories: 579, protein: 21, carbs: 22, fat: 50,
-        fiber: 10, sugar: 4, saturatedFat: 7,
-        cholesterol: 0, sodium: 5, potassium: 700
-      },
-      defaultGrams: 30,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    },
-    "Salmon + roasted veg": {
-      per100g: {
-        calories: 210, protein: 20, carbs: 5, fat: 13,
-        fiber: 2, sugar: 2, saturatedFat: 3,
-        cholesterol: 55, sodium: 80, potassium: 350
-      },
-      defaultGrams: 200,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    },
-    "Chicken stir-fry": {
-      per100g: {
-        calories: 190, protein: 22, carbs: 8, fat: 7,
-        fiber: 2, sugar: 3, saturatedFat: 2,
-        cholesterol: 60, sodium: 400, potassium: 250
-      },
-      defaultGrams: 220,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    },
-    "Shrimp stir-fry": {
-      per100g: {
-        calories: 140, protein: 20, carbs: 6, fat: 4,
-        fiber: 2, sugar: 2, saturatedFat: 1,
-        cholesterol: 150, sodium: 300, potassium: 200
-      },
-      defaultGrams: 200,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    },
-    "Protein shake": {
-      per100g: {
-        calories: 120, protein: 24, carbs: 3, fat: 1,
-        fiber: 1, sugar: 2, saturatedFat: 0.5,
-        cholesterol: 30, sodium: 150, potassium: 150
-      },
-      defaultGrams: 30,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    }
-  };
-
-  const MEAL_KEYS = [
-    "mon-breakfast","mon-lunch","mon-snack","mon-dinner","mon-evening",
-    "tue-breakfast","tue-lunch","tue-snack","tue-dinner","tue-evening",
-    "wed-breakfast","wed-lunch","wed-snack","wed-dinner","wed-evening",
-    "thu-breakfast","thu-lunch","thu-snack","thu-dinner","thu-evening",
-    "fri-breakfast","fri-lunch","fri-snack","fri-dinner","fri-evening",
-    "sat-breakfast","sat-lunch","sat-snack","sat-dinner","sat-evening",
-    "sun-breakfast","sun-lunch","sun-snack","sun-dinner","sun-evening"
-  ];
-
-  function showToast(msg) {
-    const t = document.getElementById("toast");
-    if (!t) return;
-    t.textContent = msg;
-    t.style.opacity = 1;
-    setTimeout(() => {
-      t.style.opacity = 0;
-    }, 2000);
-  }
-
-  function loadTheme() {
-    const saved = localStorage.getItem(THEME_KEY);
-    if (saved === "dark") document.body.classList.add("dark");
-  }
-  function toggleTheme() {
-    const isDark = document.body.classList.toggle("dark");
-    localStorage.setItem(THEME_KEY, isDark ? "dark" : "light");
-  }
-
-  function migrateFoodDB() {
-    const saved = localStorage.getItem(FOOD_DB_KEY);
-    if (!saved) return;
-
-    let db;
-    try { db = JSON.parse(saved); }
-    catch { return; }
-
-    let changed = false;
-    const now = new Date().toISOString();
-
-    Object.keys(db).forEach(name => {
-      const item = db[name];
-
-      if (!item.per100g || typeof item.per100g !== "object") {
-        item.per100g = {};
-        changed = true;
-      }
-
-      const fields = [
-        "calories","protein","carbs","fat","fiber","sugar",
-        "saturatedFat","cholesterol","sodium","potassium"
-      ];
-
-      fields.forEach(f => {
-        if (typeof item.per100g[f] !== "number") {
-          item.per100g[f] = 0;
-          changed = true;
-        }
-      });
-
-      if (typeof item.defaultGrams !== "number") {
-        item.defaultGrams = 100;
-        changed = true;
-      }
-
-      if (!item.createdAt) {
-        item.createdAt = now;
-        changed = true;
-      }
-
-      if (!item.updatedAt) {
-        item.updatedAt = now;
-        changed = true;
-      }
-    });
-
-    if (changed) {
-      localStorage.setItem(FOOD_DB_KEY, JSON.stringify(db));
-      console.log("Food DB migrated.");
-    }
-  }
-
-  function migrateMealPlanMulti() {
-    const saved = localStorage.getItem(MEAL_MULTI_KEY);
-    if (!saved) return;
-
-    let meals;
-    try { meals = JSON.parse(saved); }
-    catch { return; }
-
-    let changed = false;
-
-    Object.keys(meals).forEach(mealKey => {
-      const arr = meals[mealKey];
-
-      if (typeof arr === "string") {
-        meals[mealKey] = [{ food: arr, grams: 0 }];
-        changed = true;
-        return;
-      }
-
-      if (!Array.isArray(arr)) {
-        meals[mealKey] = [];
-        changed = true;
-        return;
-      }
-
-      meals[mealKey] = arr.map(item => {
-        if (!item || typeof item !== "object") {
-          changed = true;
-          return { food: "", grams: 0 };
-        }
-
-        if (typeof item.food !== "string") {
-          item.food = "";
-          changed = true;
-        }
-
-        if (typeof item.grams !== "number") {
-          item.grams = 0;
-          changed = true;
-        }
-
-        return item;
-      });
-    });
-
-    if (changed) {
-      localStorage.setItem(MEAL_MULTI_KEY, JSON.stringify(meals));
-      console.log("mealPlanMulti migrated.");
-    }
-  }
-
-  function checkVersion() {
-    const stored = localStorage.getItem("mealPlanVersion");
-    if (stored !== APP_VERSION) {
-      console.log("Version changed → running migrations");
-      migrateFoodDB();
-      migrateMealPlanMulti();
-      localStorage.setItem("mealPlanVersion", APP_VERSION);
-    }
-  }
-
-  function loadFoodDB() {
-    const saved = localStorage.getItem(FOOD_DB_KEY);
-    if (!saved) {
-      localStorage.setItem(FOOD_DB_KEY, JSON.stringify(DEFAULT_FOOD_DB));
-      return DEFAULT_FOOD_DB;
-    }
-    try {
-      return JSON.parse(saved);
-    } catch {
-      localStorage.setItem(FOOD_DB_KEY, JSON.stringify(DEFAULT_FOOD_DB));
-      return DEFAULT_FOOD_DB;
-    }
-  }
-
-  function saveFoodDB(db) {
-    localStorage.setItem(FOOD_DB_KEY, JSON.stringify(db));
-  }
-
-  function loadMealsMulti() {
-    const saved = localStorage.getItem(MEAL_MULTI_KEY);
-    if (!saved) return {};
-    try { return JSON.parse(saved); } catch { return {}; }
-  }
-
-  function saveMealsMulti(meals) {
-    localStorage.setItem(MEAL_MULTI_KEY, JSON.stringify(meals));
-  }
-
-  function loadDailyLogs() {
-    const saved = localStorage.getItem(DAILY_LOGS_KEY);
-    if (!saved) return {};
-    try { return JSON.parse(saved); } catch { return {}; }
-  }
-
-  function saveDailyLogs(logs) {
-    localStorage.setItem(DAILY_LOGS_KEY, JSON.stringify(logs));
-  }
-
-  function renderFoodOptions(select, foodDB, currentValue) {
-    const names = Object.keys(foodDB).sort();
-    select.innerHTML = "";
-    const emptyOpt = document.createElement("option");
-    emptyOpt.value = "";
-    emptyOpt.textContent = "Select food…";
-    select.appendChild(emptyOpt);
-    names.forEach(name => {
-      const opt = document.createElement("option");
-      opt.value = name;
-      opt.textContent = name;
-      select.appendChild(opt);
-    });
-    if (currentValue && names.includes(currentValue)) {
-      select.value = currentValue;
-    }
-  }
-
-  function createMealItemElement(mealKey, index, foodDB, itemData, meals) {
-    const item = itemData || { food: "", grams: 0 };
-
-    const div = document.createElement("div");
-    div.className = "meal-item";
-    div.dataset.index = index;
-
-    const sel = document.createElement("select");
-    sel.className = "meal-food";
-    renderFoodOptions(sel, foodDB, item.food);
-
-    const gramsInput = document.createElement("input");
-    gramsInput.className = "meal-grams";
-    gramsInput.type = "number";
-    gramsInput.placeholder = "Grams";
-    gramsInput.value = item.grams || "";
-
-    const delBtn = document.createElement("button");
-    delBtn.type = "button";
-    delBtn.textContent = "Delete";
-
-    sel.addEventListener("change", () => {
-      const arr = meals[mealKey] || [];
-      arr[index] = arr[index] || { food: "", grams: 0 };
-      arr[index].food = sel.value;
-      meals[mealKey] = arr;
-      saveMealsMulti(meals);
-      calculateTotals();
-      showToast("Item updated");
-    });
-
-    gramsInput.addEventListener("input", () => {
-      const arr = meals[mealKey] || [];
-      arr[index] = arr[index] || { food: "", grams: 0 };
-      arr[index].grams = parseFloat(gramsInput.value) || 0;
-      meals[mealKey] = arr;
-      saveMealsMulti(meals);
-      calculateTotals();
-      showToast("Item updated");
-    });
-
-    delBtn.addEventListener("click", () => {
-      const arr = meals[mealKey] || [];
-      arr.splice(index, 1);
-      meals[mealKey] = arr;
-      saveMealsMulti(meals);
-      renderMealContainer(mealKey, foodDB, meals);
-      calculateTotals();
-      showToast("Item deleted");
-    });
-
-    div.appendChild(sel);
-    div.appendChild(gramsInput);
-    div.appendChild(delBtn);
-
-    return div;
-  }
-
-  function renderMealContainer(mealKey, foodDB, meals) {
-    const container = document.querySelector(`.meal-container[data-key="${mealKey}"]`);
-    if (!container) return;
-
-    container.innerHTML = "";
-
-    const arr = meals[mealKey] || [];
-    arr.forEach((item, idx) => {
-      const el = createMealItemElement(mealKey, idx, foodDB, item, meals);
-      container.appendChild(el);
-    });
-
-    const addBtn = document.createElement("button");
-    addBtn.type = "button";
-    addBtn.textContent = "+ Add Item";
-    addBtn.className = "add-item";
-
-    addBtn.addEventListener("click", () => {
-      const current = meals[mealKey] || [];
-      const newIndex = current.length;
-      current.push({ food: "", grams: 0 });
-      meals[mealKey] = current;
-      saveMealsMulti(meals);
-      renderMealContainer(mealKey, foodDB, meals);
-      calculateTotals();
-      showToast("Item added");
-    });
-
-    container.appendChild(addBtn);
-  }
-
-  function initDashboard() {
-    checkVersion();
-    loadTheme();
-    const foodDB = loadFoodDB();
-    let meals = loadMealsMulti();
-
-    MEAL_KEYS.forEach(key => {
-      renderMealContainer(key, foodDB, meals);
-    });
-
-    calculateTotals();
-  }
-
-  function calculateTotals() {
-    const foodDB = loadFoodDB();
-    const meals = loadMealsMulti();
-
-    const totals = {
-      calories: 0,
-      protein: 0,
-      carbs: 0,
-      fat: 0,
-      fiber: 0,
-      sugar: 0,
-      saturatedFat: 0,
-      cholesterol: 0,
-      sodium: 0,
-      potassium: 0
+  <script>
+    // Firebase config
+    const firebaseConfig = {
+      apiKey: "AIzaSyBDud5gxlssW0_rb-3IFhhE397QAEwvloQ",
+      authDomain: "meal-plan-pwa-f27a2.firebaseapp.com",
+      projectId: "meal-plan-pwa-f27a2",
+      storageBucket: "meal-plan-pwa-f27a2.firebasestorage.app",
+      messagingSenderId: "919710838019",
+      appId: "1:919710838019:web:26e5ed5d4981821b998d36"
     };
 
-    Object.keys(meals).forEach(mealKey => {
-      const arr = meals[mealKey] || [];
-      arr.forEach(item => {
-        if (!item.food || !foodDB[item.food]) return;
-        const food = foodDB[item.food];
-        const per100 = food.per100g;
-        const grams = item.grams && item.grams > 0 ? item.grams : (food.defaultGrams || 100);
-        const factor = grams / 100;
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
 
-        totals.calories     += per100.calories     * factor;
-        totals.protein      += per100.protein      * factor;
-        totals.carbs        += per100.carbs        * factor;
-        totals.fat          += per100.fat          * factor;
-        totals.fiber        += per100.fiber        * factor;
-        totals.sugar        += per100.sugar        * factor;
-        totals.saturatedFat += per100.saturatedFat * factor;
-        totals.cholesterol  += per100.cholesterol  * factor;
-        totals.sodium       += per100.sodium       * factor;
-        totals.potassium    += per100.potassium    * factor;
-      });
-    });
+    // Cloud sync helpers
+    async function syncToCloud(key, value) {
+      await db.collection("pwaData").doc(key).set(
+        {
+          value,
+          updatedAt: Date.now()
+        },
+        { merge: true }
+      );
+    }
 
-    localStorage.setItem(DAILY_TOTALS_KEY, JSON.stringify(totals));
-    logToday(totals);
-    renderTotals(totals);
-    showToast("Daily totals updated");
-  }
+    async function syncFromCloud(key) {
+      const doc = await db.collection("pwaData").doc(key).get();
+      if (!doc.exists) return null;
+      return doc.data().value;
+    }
 
-  function logToday(totals) {
-    const logs = loadDailyLogs();
-    const today = new Date();
-    const key = today.toISOString().slice(0, 10);
+    async function loadSynced(key, fallback) {
+      const cloud = await syncFromCloud(key);
+      if (cloud) {
+        localStorage.setItem(key, JSON.stringify(cloud));
+        return cloud;
+      }
+      syncToCloud(key, fallback);
+      return fallback;
+    }
 
-    logs[key] = {
-      date: key,
-      totals,
-      loggedAt: new Date().toISOString()
+    // Sync status UI helpers
+    function setSyncStatus(text, color = "#4CAF50") {
+      const el = document.getElementById("syncStatus");
+      if (!el) return;
+      el.textContent = text;
+      el.style.background = color;
+    }
+
+    const originalSyncToCloud = syncToCloud;
+    syncToCloud = async function (key, value) {
+      setSyncStatus("Syncing...", "#FF9800");
+      await originalSyncToCloud(key, value);
+      setSyncStatus("Synced", "#4CAF50");
     };
 
-    saveDailyLogs(logs);
-  }
+    window.addEventListener("offline", () =>
+      setSyncStatus("Offline", "#F44336")
+    );
+    window.addEventListener("online", () =>
+      setSyncStatus("Online", "#4CAF50")
+    );
 
-  function pct(value, target) {
-    if (!target || target <= 0) return 0;
-    return Math.min(100, (value / target) * 100);
-  }
+    // App startup
+    async function startApp() {
+      const defaultFoodDB = [];
+      const defaultMealPlanMulti = {};
+      const defaultMealPlanVersion = 1;
 
-  function renderTotals(t) {
-    const round = v => Math.round(v);
+      window.foodDB = await loadSynced("mealPlanFoodDB_v4", defaultFoodDB);
+      window.mealPlanMulti = await loadSynced(
+        "mealPlanMulti_v4",
+        defaultMealPlanMulti
+      );
+      window.mealPlanVersion = await loadSynced(
+        "mealPlanVersion",
+        defaultMealPlanVersion
+      );
 
-    document.getElementById("calories-total").textContent     = round(t.calories);
-    document.getElementById("protein-total").textContent      = round(t.protein) + " g";
-    document.getElementById("carbs-total").textContent        = round(t.carbs) + " g";
-    document.getElementById("fat-total").textContent          = round(t.fat) + " g";
-    document.getElementById("fiber-total").textContent        = round(t.fiber) + " g";
-    document.getElementById("sugar-total").textContent        = round(t.sugar) + " g";
-    document.getElementById("satfat-total").textContent       = round(t.saturatedFat) + " g";
-    document.getElementById("chol-total").textContent         = round(t.cholesterol) + " mg";
-    document.getElementById("sodium-total").textContent       = round(t.sodium) + " mg";
-    document.getElementById("potassium-total").textContent    = round(t.potassium) + " mg";
+      setSyncStatus("Synced", "#4CAF50");
+      console.log("Loaded data:", {
+        foodDB,
+        mealPlanMulti,
+        mealPlanVersion
+      });
+    }
 
-    document.getElementById("bar-calories").style.width  = pct(t.calories, TARGETS.calories) + "%";
-    document.getElementById("bar-protein").style.width   = pct(t.protein, TARGETS.protein) + "%";
-    document.getElementById("bar-carbs").style.width     = pct(t.carbs, TARGETS.carbs) + "%";
-    document.getElementById("bar-fat").style.width       = pct(t.fat, TARGETS.fat) + "%";
-    document.getElementById("bar-fiber").style.width     = pct(t.fiber, TARGETS.fiber) + "%";
-    document.getElementById("bar-sugar").style.width     = pct(t.sugar, TARGETS.sugar) + "%";
-    document.getElementById("bar-sodium").style.width    = pct(t.sodium, TARGETS.sodium) + "%";
-    document.getElementById("bar-potassium").style.width = pct(t.potassium, TARGETS.potassium) + "%";
-  }
+    window.addEventListener("DOMContentLoaded", startApp);
 
-  if ("serviceWorker" in navigator) {
-    window.addEventListener("load", () => {
-      navigator.serviceWorker.register("service-worker.js")
-        .catch(err => console.error("SW registration failed", err));
-    });
-  }
+    // Register service worker
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker
+          .register("/service-worker.js")
+          .then(reg => console.log("SW registered", reg.scope))
+          .catch(err => console.error("SW registration failed", err));
+      });
+    }
+  </script>
 
-  document.addEventListener("DOMContentLoaded", initDashboard);
-</script>
+  <style>
+    body { font-family: sans-serif; margin: 0; padding: 1rem; }
+    #syncStatus {
+      position: fixed;
+      bottom: 10px;
+      right: 10px;
+      background: #4CAF50;
+      color: white;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 14px;
+      opacity: 0.9;
+    }
+  </style>
 </head>
+
 <body>
-<div class="wrapper">
+  <header style="
+    text-align:center;
+    padding:20px 0;
+    background:#4CAF50;
+    color:white;
+    font-size:24px;
+    font-weight:bold;
+  ">
+    Meal Plan PWA
+  </header>
 
-  <div class="top-bar">
-    <div>
-      <h1>Meal-Plan & Nutrition Dashboard</h1>
-      <div class="nav-links">
-        <a href="index.html">Dashboard</a>
-        <a href="foods.html">Food Database</a>
-        <a href="history.html">History</a>
-      </div>
-    </div>
-    <div>
-      <button type="button" onclick="toggleTheme()">Toggle Dark Mode</button>
-    </div>
+  <main style="
+    display:flex;
+    flex-direction:column;
+    gap:20px;
+    padding:20px;
+    max-width:500px;
+    margin:0 auto;
+  ">
+
+    <!-- Foods Card -->
+    <a href="/foods.html" style="
+      display:block;
+      background:white;
+      border-radius:12px;
+      padding:20px;
+      box-shadow:0 4px 10px rgba(0,0,0,0.1);
+      text-decoration:none;
+      color:#333;
+    ">
+      <h2 style="margin:0 0 10px 0;">Foods</h2>
+      <p style="margin:0; color:#666;">Manage your food database</p>
+    </a>
+
+    <!-- History Card -->
+    <a href="/history.html" style="
+      display:block;
+      background:white;
+      border-radius:12px;
+      padding:20px;
+      box-shadow:0 4px 10px rgba(0,0,0,0.1);
+      text-decoration:none;
+      color:#333;
+    ">
+      <h2 style="margin:0 0 10px 0;">History</h2>
+      <p style="margin:0; color:#666;">View your logged meals</p>
+    </a>
+
+    <!-- Meal Plan Card -->
+    <a href="/mealplan.html" style="
+      display:block;
+      background:white;
+      border-radius:12px;
+      padding:20px;
+      box-shadow:0 4px 10px rgba(0,0,0,0.1);
+      text-decoration:none;
+      color:#333;
+    ">
+      <h2 style="margin:0 0 10px 0;">Meal Plan</h2>
+      <p style="margin:0; color:#666;">Build and edit your meal plan</p>
+    </a>
+
+  </main>
+
+  <!-- Sync Status Indicator -->
+  <div id="syncStatus" style="
+    position:fixed;
+    bottom:10px;
+    right:10px;
+    background:#4CAF50;
+    color:white;
+    padding:6px 12px;
+    border-radius:6px;
+    font-size:14px;
+    opacity:0.9;
+  ">
+    Synced
   </div>
-
-  <div class="section">
-    <h2>Weekly Planner (Multi-Item Meals)</h2>
-    <table>
-      <thead>
-        <tr>
-          <th>Day</th>
-          <th>Breakfast</th>
-          <th>Lunch</th>
-          <th>Snack</th>
-          <th>Dinner</th>
-          <th>Evening</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td>Mon</td>
-          <td><div class="meal-container" data-key="mon-breakfast"></div></td>
-          <td><div class="meal-container" data-key="mon-lunch"></div></td>
-          <td><div class="meal-container" data-key="mon-snack"></div></td>
-          <td><div class="meal-container" data-key="mon-dinner"></div></td>
-          <td><div class="meal-container" data-key="mon-evening"></div></td>
-        </tr>
-        <tr>
-          <td>Tue</td>
-          <td><div class="meal-container" data-key="tue-breakfast"></div></td>
-          <td><div class="meal-container" data-key="tue-lunch"></div></td>
-          <td><div class="meal-container" data-key="tue-snack"></div></td>
-          <td><div class="meal-container" data-key="tue-dinner"></div></td>
-          <td><div class="meal-container" data-key="tue-evening"></div></td>
-        </tr>
-        <tr>
-          <td>Wed</td>
-          <td><div class="meal-container" data-key="wed-breakfast"></div></td>
-          <td><div class="meal-container" data-key="wed-lunch"></div></td>
-          <td><div class="meal-container" data-key="wed-snack"></div></td>
-          <td><div class="meal-container" data-key="wed-dinner"></div></td>
-          <td><div class="meal-container" data-key="wed-evening"></div></td>
-        </tr>
-        <tr>
-          <td>Thu</td>
-          <td><div class="meal-container" data-key="thu-breakfast"></div></td>
-          <td><div class="meal-container" data-key="thu-lunch"></div></td>
-          <td><div class="meal-container" data-key="thu-snack"></div></td>
-          <td><div class="meal-container" data-key="thu-dinner"></div></td>
-          <td><div class="meal-container" data-key="thu-evening"></div></td>
-        </tr>
-        <tr>
-          <td>Fri</td>
-          <td><div class="meal-container" data-key="fri-breakfast"></div></td>
-          <td><div class="meal-container" data-key="fri-lunch"></div></td>
-          <td><div class="meal-container" data-key="fri-snack"></div></td>
-          <td><div class="meal-container" data-key="fri-dinner"></div></td>
-          <td><div class="meal-container" data-key="fri-evening"></div></td>
-        </tr>
-        <tr>
-          <td>Sat</td>
-          <td><div class="meal-container" data-key="sat-breakfast"></div></td>
-          <td><div class="meal-container" data-key="sat-lunch"></div></td>
-          <td><div class="meal-container" data-key="sat-snack"></div></td>
-          <td><div class="meal-container" data-key="sat-dinner"></div></td>
-          <td><div class="meal-container" data-key="sat-evening"></div></td>
-        </tr>
-        <tr>
-          <td>Sun</td>
-          <td><div class="meal-container" data-key="sun-breakfast"></div></td>
-          <td><div class="meal-container" data-key="sun-lunch"></div></td>
-          <td><div class="meal-container" data-key="sun-snack"></div></td>
-          <td><div class="meal-container" data-key="sun-dinner"></div></td>
-          <td><div class="meal-container" data-key="sun-evening"></div></td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-
-  <div class="section">
-    <h2>Daily Nutrition Totals & Targets</h2>
-
-    <div class="macro-row">
-      <div class="macro-label">Calories</div>
-      <div class="macro-values">
-        <span id="calories-total">0</span> / 2200 kcal
-      </div>
-      <div class="macro-bar"><div id="bar-calories" class="macro-bar-fill"></div></div>
-    </div>
-
-    <div class="macro-row">
-      <div class="macro-label">Protein</div>
-      <div class="macro-values">
-        <span id="protein-total">0 g</span> / 150 g
-      </div>
-      <div class="macro-bar"><div id="bar-protein" class="macro-bar-fill"></div></div>
-    </div>
-
-    <div class="macro-row">
-      <div class="macro-label">Carbs</div>
-      <div class="macro-values">
-        <span id="carbs-total">0 g</span> / 200 g
-      </div>
-      <div class="macro-bar"><div id="bar-carbs" class="macro-bar-fill"></div></div>
-    </div>
-
-    <div class="macro-row">
-      <div class="macro-label">Fat</div>
-      <div class="macro-values">
-        <span id="fat-total">0 g</span> / 70 g
-      </div>
-      <div class="macro-bar"><div id="bar-fat" class="macro-bar-fill"></div></div>
-    </div>
-
-    <div class="macro-row">
-      <div class="macro-label">Fiber</div>
-      <div class="macro-values">
-        <span id="fiber-total">0 g</span> / 30 g
-      </div>
-      <div class="macro-bar"><div id="bar-fiber" class="macro-bar-fill"></div></div>
-    </div>
-
-    <div class="macro-row">
-      <div class="macro-label">Sugar</div>
-      <div class="macro-values">
-        <span id="sugar-total">0 g</span> / 40 g
-      </div>
-      <div class="macro-bar"><div id="bar-sugar" class="macro-bar-fill"></div></div>
-    </div>
-
-    <div class="macro-row">
-      <div class="macro-label">Sodium</div>
-      <div class="macro-values">
-        <span id="sodium-total">0 mg</span> / 2300 mg
-      </div>
-      <div class="macro-bar"><div id="bar-sodium" class="macro-bar-fill"></div></div>
-    </div>
-
-    <div class="macro-row">
-      <div class="macro-label">Potassium</div>
-      <div class="macro-values">
-        <span id="potassium-total">0 mg</span> / 3500 mg
-      </div>
-      <div class="macro-bar"><div id="bar-potassium" class="macro-bar-fill"></div></div>
-    </div>
-
-    <div class="macro-row">
-      <div class="macro-label">Sat. Fat</div>
-      <div class="macro-values">
-        <span id="satfat-total">0 g</span> / 20 g
-      </div>
-    </div>
-
-    <div class="macro-row">
-      <div class="macro-label">Cholesterol</div>
-      <div class="macro-values">
-        <span id="chol-total">0 mg</span> / 300 mg
-      </div>
-    </div>
-
-    <p class="macro-note">
-      Each meal can have multiple items. Food defaults and per‑100g nutrition are editable on the <strong>Food Database</strong> page. Grams per item can override defaults. Daily totals are logged automatically for history and charts.
-    </p>
-  </div>
-
-</div>
-<div id="toast"></div>
 </body>
 </html>
