@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>LocalStorage → Firestore Migration</title>
+
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js"></script>
+
+  <style>
+    body { font-family: sans-serif; padding: 20px; max-width: 600px; margin: auto; }
+    button { padding: 12px 20px; font-size: 16px; background: #4CAF50; color: white; border: none; border-radius: 6px; cursor: pointer; }
+    #output { margin-top: 20px; padding: 15px; background: #f5f5f5; border-radius: 6px; white-space: pre-wrap; }
+  </style>
+</head>
+
+<body>
+  <h1>Migration Tool</h1>
+  <p>This will migrate your LocalStorage data into Firestore.</p>
+
+  <button onclick="runMigration()">Migrate LocalStorage → Firestore</button>
+
+  <div id="output"></div>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyBDud5gxlssW0_rb-3IFhhE397QAEwvloQ",
+      authDomain: "meal-plan-pwa-f27a2.firebaseapp.com",
+      projectId: "meal-plan-pwa-f27a2",
+      storageBucket: "meal-plan-pwa-f27a2.firebasestorage.app",
+      messagingSenderId: "919710838019",
+      appId: "1:919710838019:web:26e5ed5d4981821b998d36"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    function log(msg) {
+      document.getElementById("output").textContent += msg + "\n";
+    }
+
+    async function runMigration() {
+      document.getElementById("output").textContent = "";
+      log("Starting migration...\n");
+
+      const keys = [
+        "mealPlanFoodDB_v4",
+        "mealPlanMulti_v4",
+        "mealPlanDailyTotals_v4",
+        "mealPlanDailyLogs_v4"
+      ];
+
+      for (const key of keys) {
+        const local = localStorage.getItem(key);
+
+        if (!local) {
+          log(`No localStorage data for ${key}, skipping.`);
+          continue;
+        }
+
+        let parsed;
+        try {
+          parsed = JSON.parse(local);
+        } catch (e) {
+          log(`❌ Invalid JSON for ${key}: ${e}`);
+          continue;
+        }
+
+        log(`Migrating ${key} → Firestore...`);
+
+        await db.collection("pwaData").doc(key).set(
+          {
+            value: parsed,
+            updatedAt: Date.now()
+          },
+          { merge: true }
+        );
+
+        log(`✔ ${key} migrated successfully.\n`);
+      }
+
+      log("🔥 Migration complete.");
+    }
+  </script>
+</body>
+</html>
