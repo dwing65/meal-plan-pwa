@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Nutrition History</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<meta name="theme-color" content="#121212" />
+
+<style>
+  :root {
+    --bg: #f7f7f7;
+    --card-bg: #ffffff;
+    --text: #222;
+    --border: #ddd;
+    --accent: #0077cc;
+    --accent-soft: #cfe6ff;
+  }
+  body.dark {
+    --bg: #121212;
+    --card-bg: #1e1e1e;
+    --text: #f5f5f5;
+    --border: #333;
+    --accent: #4da3ff;
+    --accent-soft: #203a5c;
+  }
+  body {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+  }
+  .wrapper {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 16px;
+  }
+  .top-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+  .top-bar h1 {
+    margin: 0;
+  }
+  .nav-links a {
+    margin-right: 8px;
+    font-size: 0.9rem;
+    text-decoration: none;
+    color: var(--accent);
+  }
+  .section {
+    background: var(--card-bg);
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    margin-bottom: 16px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 4px 6px;
+    text-align: right;
+  }
+  th {
+    background: rgba(0,0,0,0.03);
+  }
+  th:first-child, td:first-child {
+    text-align: left;
+  }
+  button {
+    padding: 6px 10px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: var(--card-bg);
+    color: var(--text);
+    margin-right: 6px;
+    margin-top: 4px;
+  }
+  button:hover {
+    border-color: var(--accent);
+  }
+  .chart-row {
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+    margin: 6px 0;
+  }
+  .chart-label {
+    min-width: 80px;
+    font-size: 0.8rem;
+  }
+  .chart-bars {
+    flex: 1;
+    display: flex;
+    gap: 4px;
+    align-items: flex-end;
+  }
+  .chart-bar {
+    flex: 1;
+    background: var(--accent-soft);
+    position: relative;
+    height: 80px;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .chart-bar-fill {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background: var(--accent);
+  }
+  .chart-bar-label {
+    position: absolute;
+    bottom: 2px;
+    left: 2px;
+    font-size: 0.7rem;
+    color: #fff;
+  }
+  @media (max-width: 600px) {
+    .wrapper {
+      padding: 10px;
+    }
+  }
+</style>
+
+<script>
+  const THEME_KEY = "mealPlanTheme_v3";
+  const DAILY_LOGS_KEY = "mealPlanDailyLogs_v3";
+
+  function loadTheme() {
+    const saved = localStorage.getItem(THEME_KEY);
+    if (saved === "dark") document.body.classList.add("dark");
+  }
+  function toggleTheme() {
+    const isDark = document.body.classList.toggle("dark");
+    localStorage.setItem(THEME_KEY, isDark ? "dark" : "light");
+  }
+
+  function loadDailyLogs() {
+    const saved = localStorage.getItem(DAILY_LOGS_KEY);
+    if (!saved) return {};
+    try { return JSON.parse(saved); } catch { return {}; }
+  }
+
+  function renderDailyTable() {
+    const logs = loadDailyLogs();
+    const dates = Object.keys(logs).sort();
+    const tbody = document.getElementById("daily-tbody");
+    tbody.innerHTML = "";
+
+    dates.forEach(date => {
+      const row = document.createElement("tr");
+      const log = logs[date];
+      const t = log.totals;
+
+      const cells = [
+        date,
+        Math.round(t.calories),
+        Math.round(t.protein),
+        Math.round(t.carbs),
+        Math.round(t.fat),
+        Math.round(t.fiber),
+        Math.round(t.sugar),
+        Math.round(t.saturatedFat),
+        Math.round(t.cholesterol),
+        Math.round(t.sodium),
+        Math.round(t.potassium)
+      ];
+
+      cells.forEach((val, idx) => {
+        const td = document.createElement("td");
+        td.textContent = val;
+        row.appendChild(td);
+      });
+
+      tbody.appendChild(row);
+    });
+  }
+
+  function getLastNDaysLogs(n) {
+    const logs = loadDailyLogs();
+    const dates = Object.keys(logs).sort();
+    if (dates.length === 0) return [];
+
+    const last = dates.slice(-n);
+    return last.map(d => ({ date: d, totals: logs[d].totals }));
+  }
+
+  function renderWeeklyCharts() {
+    const last7 = getLastNDaysLogs(7);
+    const container = document.getElementById("weekly-charts");
+    container.innerHTML = "";
+
+    if (last7.length === 0) {
+      container.textContent = "No logs yet. Use the dashboard to generate daily totals.";
+      return;
+    }
+
+    const metrics = [
+      { key: "calories", label: "Calories" },
+      { key: "protein", label: "Protein (g)" },
+      { key: "carbs", label: "Carbs (g)" },
+      { key: "fat", label: "Fat (g)" },
+      { key: "fiber", label: "Fiber (g)" },
+      { key: "sugar", label: "Sugar (g)" },
+      { key: "sodium", label: "Sodium (mg)" },
+      { key: "potassium", label: "Potassium (mg)" }
+    ];
+
+    metrics.forEach(metric => {
+      const row = document.createElement("div");
+      row.className = "chart-row";
+
+      const label = document.createElement("div");
+      label.className = "chart-label";
+      label.textContent = metric.label;
+      row.appendChild(label);
+
+      const bars = document.createElement("div");
+      bars.className = "chart-bars";
+
+      const values = last7.map(d => d.totals[metric.key] || 0);
+      const max = Math.max(...values, 1);
+
+      last7.forEach((d, idx) => {
+        const bar = document.createElement("div");
+        bar.className = "chart-bar";
+
+        const fill = document.createElement("div");
+        fill.className = "chart-bar-fill";
+        fill.style.height = (values[idx] / max * 100) + "%";
+
+        const lbl = document.createElement("div");
+        lbl.className = "chart-bar-label";
+        lbl.textContent = d.date.slice(5); // MM-DD
+
+        bar.appendChild(fill);
+        bar.appendChild(lbl);
+        bars.appendChild(bar);
+      });
+
+      row.appendChild(bars);
+      container.appendChild(row);
+    });
+  }
+
+  function exportCSV() {
+    const logs = loadDailyLogs();
+    const dates = Object.keys(logs).sort();
+    if (dates.length === 0) {
+      alert("No logs to export.");
+      return;
+    }
+
+    const header = [
+      "date",
+      "calories",
+      "protein",
+      "carbs",
+      "fat",
+      "fiber",
+      "sugar",
+      "saturatedFat",
+      "cholesterol",
+      "sodium",
+      "potassium"
+    ];
+
+    const rows = [header.join(",")];
+
+    dates.forEach(date => {
+      const t = logs[date].totals;
+      const row = [
+        date,
+        t.calories || 0,
+        t.protein || 0,
+        t.carbs || 0,
+        t.fat || 0,
+        t.fiber || 0,
+        t.sugar || 0,
+        t.saturatedFat || 0,
+        t.cholesterol || 0,
+        t.sodium || 0,
+        t.potassium || 0
+      ];
+      rows.push(row.join(","));
+    });
+
+    const blob = new Blob([rows.join("\n")], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "nutrition-history.csv";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("service-worker.js")
+        .catch(err => console.error("SW registration failed", err));
+    });
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    loadTheme();
+    renderDailyTable();
+    renderWeeklyCharts();
+    document.getElementById("export-csv").addEventListener("click", exportCSV);
+  });
+</script>
+</head>
+<body>
+<div class="wrapper">
+
+  <div class="top-bar">
+    <div>
+      <h1>Nutrition History</h1>
+      <div class="nav-links">
+        <a href="index.html">Dashboard</a>
+        <a href="foods.html">Food Database</a>
+        <a href="history.html">History</a>
+      </div>
+    </div>
+    <div>
+      <button type="button" onclick="toggleTheme()">Toggle Dark Mode</button>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Daily Nutrient Logs</h2>
+    <button id="export-csv" type="button">Export CSV</button>
+    <table>
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Calories</th>
+          <th>Protein</th>
+          <th>Carbs</th>
+          <th>Fat</th>
+          <th>Fiber</th>
+          <th>Sugar</th>
+          <th>Sat. Fat</th>
+          <th>Cholesterol</th>
+          <th>Sodium</th>
+          <th>Potassium</th>
+        </tr>
+      </thead>
+      <tbody id="daily-tbody"></tbody>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>Last 7 Days – Weekly Charts</h2>
+    <div id="weekly-charts"></div>
+  </div>
+
+</div>
+</body>
+</html>

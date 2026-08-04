@@ -165,8 +165,8 @@
   const MEAL_PLAN_KEY = "mealPlanMeals_v3";
   const MEAL_OVERRIDES_KEY = "mealPlanOverrides_v3";
   const DAILY_TOTALS_KEY = "mealPlanDailyTotals_v3";
+  const DAILY_LOGS_KEY = "mealPlanDailyLogs_v3";
 
-  // Targets (you can tweak these)
   const TARGETS = {
     calories: 2200,
     protein: 150,
@@ -180,7 +180,6 @@
     potassium: 3500
   };
 
-  // Default food DB (per 100g + default grams)
   const DEFAULT_FOOD_DB = {
     "Greek yogurt + berries": {
       per100g: {
@@ -188,7 +187,9 @@
         fiber: 1, sugar: 9, saturatedFat: 1,
         cholesterol: 5, sodium: 36, potassium: 150
       },
-      defaultGrams: 150
+      defaultGrams: 150,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     },
     "Oats": {
       per100g: {
@@ -196,7 +197,9 @@
         fiber: 10, sugar: 1, saturatedFat: 1,
         cholesterol: 0, sodium: 2, potassium: 350
       },
-      defaultGrams: 40
+      defaultGrams: 40,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     },
     "Chicken salad": {
       per100g: {
@@ -204,7 +207,9 @@
         fiber: 2, sugar: 2, saturatedFat: 2,
         cholesterol: 60, sodium: 350, potassium: 250
       },
-      defaultGrams: 220
+      defaultGrams: 220,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     },
     "Turkey wrap": {
       per100g: {
@@ -212,7 +217,9 @@
         fiber: 3, sugar: 3, saturatedFat: 2,
         cholesterol: 40, sodium: 500, potassium: 200
       },
-      defaultGrams: 200
+      defaultGrams: 200,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     },
     "Apple": {
       per100g: {
@@ -220,7 +227,9 @@
         fiber: 2.4, sugar: 10, saturatedFat: 0,
         cholesterol: 0, sodium: 1, potassium: 107
       },
-      defaultGrams: 120
+      defaultGrams: 120,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     },
     "Nuts": {
       per100g: {
@@ -228,7 +237,9 @@
         fiber: 10, sugar: 4, saturatedFat: 7,
         cholesterol: 0, sodium: 5, potassium: 700
       },
-      defaultGrams: 30
+      defaultGrams: 30,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     },
     "Salmon + roasted veg": {
       per100g: {
@@ -236,7 +247,9 @@
         fiber: 2, sugar: 2, saturatedFat: 3,
         cholesterol: 55, sodium: 80, potassium: 350
       },
-      defaultGrams: 200
+      defaultGrams: 200,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     },
     "Chicken stir-fry": {
       per100g: {
@@ -244,7 +257,9 @@
         fiber: 2, sugar: 3, saturatedFat: 2,
         cholesterol: 60, sodium: 400, potassium: 250
       },
-      defaultGrams: 220
+      defaultGrams: 220,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     },
     "Shrimp stir-fry": {
       per100g: {
@@ -252,7 +267,9 @@
         fiber: 2, sugar: 2, saturatedFat: 1,
         cholesterol: 150, sodium: 300, potassium: 200
       },
-      defaultGrams: 200
+      defaultGrams: 200,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     },
     "Protein shake": {
       per100g: {
@@ -260,7 +277,9 @@
         fiber: 1, sugar: 2, saturatedFat: 0.5,
         cholesterol: 30, sodium: 150, potassium: 150
       },
-      defaultGrams: 30
+      defaultGrams: 30,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     }
   };
 
@@ -311,6 +330,16 @@
     localStorage.setItem(MEAL_OVERRIDES_KEY, JSON.stringify(overrides));
   }
 
+  function loadDailyLogs() {
+    const saved = localStorage.getItem(DAILY_LOGS_KEY);
+    if (!saved) return {};
+    try { return JSON.parse(saved); } catch { return {}; }
+  }
+
+  function saveDailyLogs(logs) {
+    localStorage.setItem(DAILY_LOGS_KEY, JSON.stringify(logs));
+  }
+
   function renderFoodOptions(selects, foodDB) {
     const names = Object.keys(foodDB).sort();
     selects.forEach(sel => {
@@ -339,7 +368,6 @@
     const selects = Array.from(document.querySelectorAll(".meal-select"));
     renderFoodOptions(selects, foodDB);
 
-    // Restore selections and overrides
     selects.forEach(sel => {
       const key = sel.dataset.key;
       if (meals[key]) sel.value = meals[key];
@@ -407,7 +435,22 @@
     });
 
     localStorage.setItem(DAILY_TOTALS_KEY, JSON.stringify(totals));
+    logToday(totals);
     renderTotals(totals);
+  }
+
+  function logToday(totals) {
+    const logs = loadDailyLogs();
+    const today = new Date();
+    const key = today.toISOString().slice(0, 10); // YYYY-MM-DD
+
+    logs[key] = {
+      date: key,
+      totals,
+      loggedAt: new Date().toISOString()
+    };
+
+    saveDailyLogs(logs);
   }
 
   function pct(value, target) {
@@ -458,6 +501,7 @@
       <div class="nav-links">
         <a href="index.html">Dashboard</a>
         <a href="foods.html">Food Database</a>
+        <a href="history.html">History</a>
       </div>
     </div>
     <div>
@@ -733,7 +777,7 @@
     </div>
 
     <p class="macro-note">
-      Food defaults and nutrition per 100g are editable on the <strong>Food Database</strong> page. Grams per meal can override defaults.
+      Food defaults and nutrition per 100g are editable on the <strong>Food Database</strong> page. Grams per meal can override defaults. Daily totals are logged automatically for history and charts.
     </p>
   </div>
 

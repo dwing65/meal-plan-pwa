@@ -108,6 +108,11 @@
     gap: 8px;
     margin-top: 6px;
   }
+  .timestamp {
+    font-size: 0.75rem;
+    opacity: 0.7;
+    margin-top: 2px;
+  }
   @media (max-width: 600px) {
     .wrapper {
       padding: 10px;
@@ -173,6 +178,17 @@
       header.appendChild(btnRow);
 
       card.appendChild(header);
+
+      const created = document.createElement("div");
+      created.className = "timestamp";
+      created.textContent = "Created: " + (food.createdAt ? new Date(food.createdAt).toLocaleString() : "N/A");
+
+      const updated = document.createElement("div");
+      updated.className = "timestamp";
+      updated.textContent = "Updated: " + (food.updatedAt ? new Date(food.updatedAt).toLocaleString() : "N/A");
+
+      card.appendChild(created);
+      card.appendChild(updated);
 
       const grid = document.createElement("div");
       grid.className = "grid";
@@ -257,6 +273,10 @@
 
     const num = id => parseFloat(document.getElementById(id).value) || 0;
 
+    const now = new Date().toISOString();
+    const db = loadFoodDB();
+    const existing = db[name];
+
     const food = {
       per100g: {
         calories:     num("calories"),
@@ -270,10 +290,11 @@
         sodium:       num("sodium"),
         potassium:    num("potassium")
       },
-      defaultGrams: num("default-grams") || 100
+      defaultGrams: num("default-grams") || 100,
+      createdAt: existing && existing.createdAt ? existing.createdAt : now,
+      updatedAt: now
     };
 
-    const db = loadFoodDB();
     db[name] = food;
     saveFoodDB(db);
     renderFoodList();
@@ -303,6 +324,7 @@
       <div class="nav-links">
         <a href="index.html">Dashboard</a>
         <a href="foods.html">Food Database</a>
+        <a href="history.html">History</a>
       </div>
     </div>
     <div>
