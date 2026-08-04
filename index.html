@@ -90,6 +90,25 @@
     text-align: left;
     background: rgba(0,0,0,0.03);
   }
+  .meal-container {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .meal-item {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+  }
+  .meal-item select {
+    flex: 2;
+  }
+  .meal-item input[type=number] {
+    flex: 1;
+  }
+  .meal-item button {
+    flex: 0 0 auto;
+  }
   select, input[type=number] {
     width: 100%;
     box-sizing: border-box;
@@ -160,12 +179,11 @@
 </style>
 
 <script>
-  const THEME_KEY = "mealPlanTheme_v3";
-  const FOOD_DB_KEY = "mealPlanFoodDB_v3";
-  const MEAL_PLAN_KEY = "mealPlanMeals_v3";
-  const MEAL_OVERRIDES_KEY = "mealPlanOverrides_v3";
-  const DAILY_TOTALS_KEY = "mealPlanDailyTotals_v3";
-  const DAILY_LOGS_KEY = "mealPlanDailyLogs_v3";
+  const THEME_KEY = "mealPlanTheme_v4";
+  const FOOD_DB_KEY = "mealPlanFoodDB_v4";
+  const MEAL_MULTI_KEY = "mealPlanMulti_v4";
+  const DAILY_TOTALS_KEY = "mealPlanDailyTotals_v4";
+  const DAILY_LOGS_KEY = "mealPlanDailyLogs_v4";
 
   const TARGETS = {
     calories: 2200,
@@ -283,6 +301,16 @@
     }
   };
 
+  const MEAL_KEYS = [
+    "mon-breakfast","mon-lunch","mon-snack","mon-dinner","mon-evening",
+    "tue-breakfast","tue-lunch","tue-snack","tue-dinner","tue-evening",
+    "wed-breakfast","wed-lunch","wed-snack","wed-dinner","wed-evening",
+    "thu-breakfast","thu-lunch","thu-snack","thu-dinner","thu-evening",
+    "fri-breakfast","fri-lunch","fri-snack","fri-dinner","fri-evening",
+    "sat-breakfast","sat-lunch","sat-snack","sat-dinner","sat-evening",
+    "sun-breakfast","sun-lunch","sun-snack","sun-dinner","sun-evening"
+  ];
+
   function loadTheme() {
     const saved = localStorage.getItem(THEME_KEY);
     if (saved === "dark") document.body.classList.add("dark");
@@ -310,24 +338,14 @@
     localStorage.setItem(FOOD_DB_KEY, JSON.stringify(db));
   }
 
-  function loadMeals() {
-    const saved = localStorage.getItem(MEAL_PLAN_KEY);
+  function loadMealsMulti() {
+    const saved = localStorage.getItem(MEAL_MULTI_KEY);
     if (!saved) return {};
     try { return JSON.parse(saved); } catch { return {}; }
   }
 
-  function saveMeals(meals) {
-    localStorage.setItem(MEAL_PLAN_KEY, JSON.stringify(meals));
-  }
-
-  function loadOverrides() {
-    const saved = localStorage.getItem(MEAL_OVERRIDES_KEY);
-    if (!saved) return {};
-    try { return JSON.parse(saved); } catch { return {}; }
-  }
-
-  function saveOverrides(overrides) {
-    localStorage.setItem(MEAL_OVERRIDES_KEY, JSON.stringify(overrides));
+  function saveMealsMulti(meals) {
+    localStorage.setItem(MEAL_MULTI_KEY, JSON.stringify(meals));
   }
 
   function loadDailyLogs() {
@@ -340,56 +358,116 @@
     localStorage.setItem(DAILY_LOGS_KEY, JSON.stringify(logs));
   }
 
-  function renderFoodOptions(selects, foodDB) {
+  function renderFoodOptions(select, foodDB, currentValue) {
     const names = Object.keys(foodDB).sort();
-    selects.forEach(sel => {
-      const current = sel.value;
-      sel.innerHTML = "";
-      const emptyOpt = document.createElement("option");
-      emptyOpt.value = "";
-      emptyOpt.textContent = "Select food…";
-      sel.appendChild(emptyOpt);
-      names.forEach(name => {
-        const opt = document.createElement("option");
-        opt.value = name;
-        opt.textContent = name;
-        sel.appendChild(opt);
-      });
-      if (current && names.includes(current)) sel.value = current;
+    select.innerHTML = "";
+    const emptyOpt = document.createElement("option");
+    emptyOpt.value = "";
+    emptyOpt.textContent = "Select food…";
+    select.appendChild(emptyOpt);
+    names.forEach(name => {
+      const opt = document.createElement("option");
+      opt.value = name;
+      opt.textContent = name;
+      select.appendChild(opt);
     });
+    if (currentValue && names.includes(currentValue)) {
+      select.value = currentValue;
+    }
+  }
+
+  function createMealItemElement(mealKey, index, foodDB, itemData, meals) {
+    const item = itemData || { food: "", grams: 0 };
+
+    const div = document.createElement("div");
+    div.className = "meal-item";
+    div.dataset.index = index;
+
+    const sel = document.createElement("select");
+    sel.className = "meal-food";
+    renderFoodOptions(sel, foodDB, item.food);
+
+    const gramsInput = document.createElement("input");
+    gramsInput.className = "meal-grams";
+    gramsInput.type = "number";
+    gramsInput.placeholder = "Grams";
+    gramsInput.value = item.grms || item.grams || "";
+
+    const delBtn = document.createElement("button");
+    delBtn.type = "button";
+    delBtn.textContent = "Delete";
+
+    sel.addEventListener("change", () => {
+      const arr = meals[mealKey] || [];
+      arr[index] = arr[index] || { food: "", grams: 0 };
+      arr[index].food = sel.value;
+      meals[mealKey] = arr;
+      saveMealsMulti(meals);
+      calculateTotals();
+    });
+
+    gramsInput.addEventListener("input", () => {
+      const arr = meals[mealKey] || [];
+      arr[index] = arr[index] || { food: "", grams: 0 };
+      arr[index].grams = parseFloat(gramsInput.value) || 0;
+      meals[mealKey] = arr;
+      saveMealsMulti(meals);
+      calculateTotals();
+    });
+
+    delBtn.addEventListener("click", () => {
+      const arr = meals[mealKey] || [];
+      arr.splice(index, 1);
+      meals[mealKey] = arr;
+      saveMealsMulti(meals);
+      renderMealContainer(mealKey, foodDB, meals);
+      calculateTotals();
+    });
+
+    div.appendChild(sel);
+    div.appendChild(gramsInput);
+    div.appendChild(delBtn);
+
+    return div;
+  }
+
+  function renderMealContainer(mealKey, foodDB, meals) {
+    const container = document.querySelector(`.meal-container[data-key="${mealKey}"]`);
+    if (!container) return;
+
+    container.innerHTML = "";
+
+    const arr = meals[mealKey] || [];
+    arr.forEach((item, idx) => {
+      const el = createMealItemElement(mealKey, idx, foodDB, item, meals);
+      container.appendChild(el);
+    });
+
+    const addBtn = document.createElement("button");
+    addBtn.type = "button";
+    addBtn.textContent = "+ Add Item";
+    addBtn.className = "add-item";
+
+    addBtn.addEventListener("click", () => {
+      const current = meals[mealKey] || [];
+      const newIndex = current.length;
+      current.push({ food: "", grams: 0 });
+      meals[mealKey] = current;
+      saveMealsMulti(meals);
+      renderMealContainer(mealKey, foodDB, meals);
+      calculateTotals();
+    });
+
+    container.appendChild(addBtn);
   }
 
   function initDashboard() {
     loadTheme();
-    let foodDB = loadFoodDB();
-    let meals = loadMeals();
-    let overrides = loadOverrides();
+    const foodDB = loadFoodDB();
+    let meals = loadMealsMulti();
 
-    const selects = Array.from(document.querySelectorAll(".meal-select"));
-    renderFoodOptions(selects, foodDB);
-
-    selects.forEach(sel => {
-      const key = sel.dataset.key;
-      if (meals[key]) sel.value = meals[key];
-      const gramsInput = document.querySelector(`input[data-key="${key}-grams"]`);
-      if (gramsInput && overrides[key]) gramsInput.value = overrides[key];
-      sel.addEventListener("change", () => {
-        meals[key] = sel.value || "";
-        saveMeals(meals);
-        calculateTotals();
-      });
-    });
-
-    const gramsInputs = Array.from(document.querySelectorAll(".meal-grams"));
-    gramsInputs.forEach(inp => {
-      const key = inp.dataset.key.replace("-grams", "");
-      if (overrides[key]) inp.value = overrides[key];
-      inp.addEventListener("input", () => {
-        const val = parseFloat(inp.value) || 0;
-        overrides[key] = val > 0 ? val : 0;
-        saveOverrides(overrides);
-        calculateTotals();
-      });
+    MEAL_KEYS.forEach(key => {
+      renderMealContainer(key, foodDB, meals);
     });
 
     calculateTotals();
@@ -397,8 +475,7 @@
 
   function calculateTotals() {
     const foodDB = loadFoodDB();
-    const meals = loadMeals();
-    const overrides = loadOverrides();
+    const meals = loadMealsMulti();
 
     const totals = {
       calories: 0,
@@ -413,25 +490,26 @@
       potassium: 0
     };
 
-    Object.keys(meals).forEach(key => {
-      const foodName = meals[key];
-      if (!foodName || !foodDB[foodName]) return;
-      const food = foodDB[foodName];
-      const per100 = food.per100g;
-      const overrideGrams = overrides[key] || 0;
-      const grams = overrideGrams > 0 ? overrideGrams : (food.defaultGrams || 100);
-      const factor = grams / 100;
+    Object.keys(meals).forEach(mealKey => {
+      const arr = meals[mealKey] || [];
+      arr.forEach(item => {
+        if (!item.food || !foodDB[item.food]) return;
+        const food = foodDB[item.food];
+        const per100 = food.per100g;
+        const grams = item.grams && item.grams > 0 ? item.grams : (food.defaultGrams || 100);
+        const factor = grams / 100;
 
-      totals.calories     += per100.calories     * factor;
-      totals.protein      += per100.protein      * factor;
-      totals.carbs        += per100.carbs        * factor;
-      totals.fat          += per100.fat          * factor;
-      totals.fiber        += per100.fiber        * factor;
-      totals.sugar        += per100.sugar        * factor;
-      totals.saturatedFat += per100.saturatedFat * factor;
-      totals.cholesterol  += per100.cholesterol  * factor;
-      totals.sodium       += per100.sodium       * factor;
-      totals.potassium    += per100.potassium    * factor;
+        totals.calories     += per100.calories     * factor;
+        totals.protein      += per100.protein      * factor;
+        totals.carbs        += per100.carbs        * factor;
+        totals.fat          += per100.fat          * factor;
+        totals.fiber        += per100.fiber        * factor;
+        totals.sugar        += per100.sugar        * factor;
+        totals.saturatedFat += per100.saturatedFat * factor;
+        totals.cholesterol  += per100.cholesterol  * factor;
+        totals.sodium       += per100.sodium       * factor;
+        totals.potassium    += per100.potassium    * factor;
+      });
     });
 
     localStorage.setItem(DAILY_TOTALS_KEY, JSON.stringify(totals));
@@ -510,7 +588,7 @@
   </div>
 
   <div class="section">
-    <h2>Weekly Planner (Food + Grams Override)</h2>
+    <h2>Weekly Planner (Multi-Item Meals)</h2>
     <table>
       <thead>
         <tr>
@@ -526,170 +604,65 @@
         <!-- Mon -->
         <tr>
           <td>Mon</td>
-          <td>
-            <select class="meal-select" data-key="mon-breakfast"></select>
-            <input class="meal-grams" type="number" placeholder="Override grams" data-key="mon-breakfast-grams">
-          </td>
-          <td>
-            <select class="meal-select" data-key="mon-lunch"></select>
-            <input class="meal-grams" type="number" placeholder="Override grams" data-key="mon-lunch-grams">
-          </td>
-          <td>
-            <select class="meal-select" data-key="mon-snack"></select>
-            <input class="meal-grams" type="number" placeholder="Override grams" data-key="mon-snack-grams">
-          </td>
-          <td>
-            <select class="meal-select" data-key="mon-dinner"></select>
-            <input class="meal-grams" type="number" placeholder="Override grams" data-key="mon-dinner-grams">
-          </td>
-          <td>
-            <select class="meal-select" data-key="mon-evening"></select>
-            <input class="meal-grams" type="number" placeholder="Override grams" data-key="mon-evening-grams">
-          </td>
+          <td><div class="meal-container" data-key="mon-breakfast"></div></td>
+          <td><div class="meal-container" data-key="mon-lunch"></div></td>
+          <td><div class="meal-container" data-key="mon-snack"></div></td>
+          <td><div class="meal-container" data-key="mon-dinner"></div></td>
+          <td><div class="meal-container" data-key="mon-evening"></div></td>
         </tr>
         <!-- Tue -->
         <tr>
           <td>Tue</td>
-          <td>
-            <select class="meal-select" data-key="tue-breakfast"></select>
-            <input class="meal-grams" type="number" placeholder="Override grams" data-key="tue-breakfast-grams">
-          </td>
-          <td>
-            <select class="meal-select" data-key="tue-lunch"></select>
-            <input class="meal-grams" type="number" placeholder="Override grams" data-key="tue-lunch-grams">
-          </td>
-          <td>
-            <select class="meal-select" data-key="tue-snack"></select>
-            <input class="meal-grams" type="number" placeholder="Override grams" data-key="tue-snack-grams">
-          </td>
-          <td>
-            <select class="meal-select" data-key="tue-dinner"></select>
-            <input class="meal-grams" type="number" placeholder="Override grams" data-key="tue-dinner-grams">
-          </td>
-          <td>
-            <select class="meal-select" data-key="tue-evening"></select>
-            <input class="meal-grams" type="number" placeholder="Override grams" data-key="tue-evening-grams">
-          </td>
+          <td><div class="meal-container" data-key="tue-breakfast"></div></td>
+          <td><div class="meal-container" data-key="tue-lunch"></div></td>
+          <td><div class="meal-container" data-key="tue-snack"></div></td>
+          <td><div class="meal-container" data-key="tue-dinner"></div></td>
+          <td><div class="meal-container" data-key="tue-evening"></div></td>
         </tr>
         <!-- Wed -->
         <tr>
           <td>Wed</td>
-          <td>
-            <select class="meal-select" data-key="wed-breakfast"></select>
-            <input class="meal-grams" type="number" placeholder="Override grams" data-key="wed-breakfast-grams">
-          </td>
-          <td>
-            <select class="meal-select" data-key="wed-lunch"></select>
-            <input class="meal-grams" type="number" placeholder="Override grams" data-key="wed-lunch-grams">
-          </td>
-          <td>
-            <select class="meal-select" data-key="wed-snack"></select>
-            <input class="meal-grams" type="number" placeholder="Override grams" data-key="wed-snack-grams">
-          </td>
-          <td>
-            <select class="meal-select" data-key="wed-dinner"></select>
-            <input class="meal-grams" type="number" placeholder="Override grams" data-key="wed-dinner-grams">
-          </td>
-          <td>
-            <select class="meal-select" data-key="wed-evening"></select>
-            <input class="meal-grams" type="number" placeholder="Override grams" data-key="wed-evening-grams">
-          </td>
+          <td><div class="meal-container" data-key="wed-breakfast"></div></td>
+          <td><div class="meal-container" data-key="wed-lunch"></div></td>
+          <td><div class="meal-container" data-key="wed-snack"></div></td>
+          <td><div class="meal-container" data-key="wed-dinner"></div></td>
+          <td><div class="meal-container" data-key="wed-evening"></div></td>
         </tr>
         <!-- Thu -->
         <tr>
           <td>Thu</td>
-          <td>
-            <select class="meal-select" data-key="thu-breakfast"></select>
-            <input class="meal-grams" type="number" placeholder="Override grams" data-key="thu-breakfast-grams">
-          </td>
-          <td>
-            <select class="meal-select" data-key="thu-lunch"></select>
-            <input class="meal-grams" type="number" placeholder="Override grams" data-key="thu-lunch-grams">
-          </td>
-          <td>
-            <select class="meal-select" data-key="thu-snack"></select>
-            <input class="meal-grams" type="number" placeholder="Override grams" data-key="thu-snack-grams">
-          </td>
-          <td>
-            <select class="meal-select" data-key="thu-dinner"></select>
-            <input class="meal-grams" type="number" placeholder="Override grams" data-key="thu-dinner-grams">
-          </td>
-          <td>
-            <select class="meal-select" data-key="thu-evening"></select>
-            <input class="meal-grams" type="number" placeholder="Override grams" data-key="thu-evening-grams">
-          </td>
+          <td><div class="meal-container" data-key="thu-breakfast"></div></td>
+          <td><div class="meal-container" data-key="thu-lunch"></div></td>
+          <td><div class="meal-container" data-key="thu-snack"></div></td>
+          <td><div class="meal-container" data-key="thu-dinner"></div></td>
+          <td><div class="meal-container" data-key="thu-evening"></div></td>
         </tr>
         <!-- Fri -->
         <tr>
           <td>Fri</td>
-          <td>
-            <select class="meal-select" data-key="fri-breakfast"></select>
-            <input class="meal-grams" type="number" placeholder="Override grams" data-key="fri-breakfast-grams">
-          </td>
-          <td>
-            <select class="meal-select" data-key="fri-lunch"></select>
-            <input class="meal-grams" type="number" placeholder="Override grams" data-key="fri-lunch-grams">
-          </td>
-          <td>
-            <select class="meal-select" data-key="fri-snack"></select>
-            <input class="meal-grams" type="number" placeholder="Override grams" data-key="fri-snack-grams">
-          </td>
-          <td>
-            <select class="meal-select" data-key="fri-dinner"></select>
-            <input class="meal-grams" type="number" placeholder="Override grams" data-key="fri-dinner-grams">
-          </td>
-          <td>
-            <select class="meal-select" data-key="fri-evening"></select>
-            <input class="meal-grams" type="number" placeholder="Override grams" data-key="fri-evening-grams">
-          </td>
+          <td><div class="meal-container" data-key="fri-breakfast"></div></td>
+          <td><div class="meal-container" data-key="fri-lunch"></div></td>
+          <td><div class="meal-container" data-key="fri-snack"></div></td>
+          <td><div class="meal-container" data-key="fri-dinner"></div></td>
+          <td><div class="meal-container" data-key="fri-evening"></div></td>
         </tr>
         <!-- Sat -->
         <tr>
           <td>Sat</td>
-          <td>
-            <select class="meal-select" data-key="sat-breakfast"></select>
-            <input class="meal-grams" type="number" placeholder="Override grams" data-key="sat-breakfast-grams">
-          </td>
-          <td>
-            <select class="meal-select" data-key="sat-lunch"></select>
-            <input class="meal-grams" type="number" placeholder="Override grams" data-key="sat-lunch-grams">
-          </td>
-          <td>
-            <select class="meal-select" data-key="sat-snack"></select>
-            <input class="meal-grams" type="number" placeholder="Override grams" data-key="sat-snack-grams">
-          </td>
-          <td>
-            <select class="meal-select" data-key="sat-dinner"></select>
-            <input class="meal-grams" type="number" placeholder="Override grams" data-key="sat-dinner-grams">
-          </td>
-          <td>
-            <select class="meal-select" data-key="sat-evening"></select>
-            <input class="meal-grams" type="number" placeholder="Override grams" data-key="sat-evening-grams">
-          </td>
+          <td><div class="meal-container" data-key="sat-breakfast"></div></td>
+          <td><div class="meal-container" data-key="sat-lunch"></div></td>
+          <td><div class="meal-container" data-key="sat-snack"></div></td>
+          <td><div class="meal-container" data-key="sat-dinner"></div></td>
+          <td><div class="meal-container" data-key="sat-evening"></div></td>
         </tr>
         <!-- Sun -->
         <tr>
           <td>Sun</td>
-          <td>
-            <select class="meal-select" data-key="sun-breakfast"></select>
-            <input class="meal-grams" type="number" placeholder="Override grams" data-key="sun-breakfast-grams">
-          </td>
-          <td>
-            <select class="meal-select" data-key="sun-lunch"></select>
-            <input class="meal-grams" type="number" placeholder="Override grams" data-key="sun-lunch-grams">
-          </td>
-          <td>
-            <select class="meal-select" data-key="sun-snack"></select>
-            <input class="meal-grams" type="number" placeholder="Override grams" data-key="sun-snack-grams">
-          </td>
-          <td>
-            <select class="meal-select" data-key="sun-dinner"></select>
-            <input class="meal-grams" type="number" placeholder="Override grams" data-key="sun-dinner-grams">
-          </td>
-          <td>
-            <select class="meal-select" data-key="sun-evening"></select>
-            <input class="meal-grams" type="number" placeholder="Override grams" data-key="sun-evening-grams">
-          </td>
+          <td><div class="meal-container" data-key="sun-breakfast"></div></td>
+          <td><div class="meal-container" data-key="sun-lunch"></div></td>
+          <td><div class="meal-container" data-key="sun-snack"></div></td>
+          <td><div class="meal-container" data-key="sun-dinner"></div></td>
+          <td><div class="meal-container" data-key="sun-evening"></div></td>
         </tr>
       </tbody>
     </table>
@@ -777,7 +750,7 @@
     </div>
 
     <p class="macro-note">
-      Food defaults and nutrition per 100g are editable on the <strong>Food Database</strong> page. Grams per meal can override defaults. Daily totals are logged automatically for history and charts.
+      Each meal can have multiple items. Food defaults and per‑100g nutrition are editable on the <strong>Food Database</strong> page. Grams per item can override defaults. Daily totals are logged automatically for history and charts.
     </p>
   </div>
 
